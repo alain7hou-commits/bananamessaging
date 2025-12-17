@@ -26,9 +26,6 @@ background:#333;color:#fff;padding:10px 18px;border-radius:6px;display:none;z-in
 #sendBar input{width:100%;padding:8px}
 .smallBtn{font-size:11px;margin-left:4px}
 .panel{background:#fafafa;border:1px solid #ddd;padding:6px;margin-bottom:10px}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
-.online{background:#3ccf4e}
-.offline{background:#bbb}
 .time{font-size:10px;color:#888;margin-left:6px}
 </style>
 </head>
@@ -37,7 +34,6 @@ background:#333;color:#fff;padding:10px 18px;border-radius:6px;display:none;z-in
 
 <div id="popup"></div>
 
-<!-- LOGIN -->
 <div id="loginPage">
   <div id="loginBox">
     <h3>🍌 Banana Messaging</h3>
@@ -45,11 +41,9 @@ background:#333;color:#fff;padding:10px 18px;border-radius:6px;display:none;z-in
     <input id="p" type="password" placeholder="Password">
     <button onclick="signup()">Sign Up</button>
     <button onclick="loginUser()">Login</button>
-    <button class="resetBtn" onclick="loginEmergencyReset()">🚨 Emergency Reset</button>
   </div>
 </div>
 
-<!-- APP -->
 <div id="app">
   <div id="sidebar">
     <button onclick="openGlobal()">🌍 Global</button>
@@ -57,9 +51,6 @@ background:#333;color:#fff;padding:10px 18px;border-radius:6px;display:none;z-in
 
     <div id="adminPanel"></div>
     <div id="groupAdmin"></div>
-
-    <h4>Users</h4>
-    <div id="users"></div>
 
     <h4>Groups</h4>
     <div id="groups"></div>
@@ -78,7 +69,6 @@ background:#333;color:#fff;padding:10px 18px;border-radius:6px;display:none;z-in
 <script src="https://www.gstatic.com/firebasejs/8.2.1/firebase-database.js"></script>
 
 <script>
-/* INIT */
 firebase.initializeApp({
   apiKey:"AIzaSyBw24k2FBeJJm_weANCnbdxmPbCHXNKI6I",
   databaseURL:"https://bananamessagingsite-default-rtdb.firebaseio.com"
@@ -88,39 +78,32 @@ const MAIN_ADMIN="banana777";
 
 let user=null, chat="global", msgRef=null, currentGroup=null;
 
-/* UTILS */
 const hash=t=>[...t].reduce((h,c)=>((h<<5)+h)+c.charCodeAt(0),5381).toString();
-function popup(t){popupBox.textContent=t;popupBox.style.display="block";setTimeout(()=>popupBox.style.display="none",2500)}
 const popupBox=document.getElementById("popup");
+const popup=t=>{popupBox.textContent=t;popupBox.style.display="block";setTimeout(()=>popupBox.style.display="none",2500)};
 
 /* AUTH */
 async function signup(){
-  if(!u.value||!p.value) return popup("Fill all fields");
-  if((await db.ref("users/"+u.value).once("value")).exists()) return popup("User already exists");
+  if((await db.ref("users/"+u.value).once("value")).exists()) return popup("User exists");
   await db.ref("users/"+u.value).set({password:hash(p.value),banned:false});
-  popup("Account created!");
   start(u.value);
 }
 async function loginUser(){
   const s=await db.ref("users/"+u.value).once("value");
-  if(!s.exists()) return popup("User not found");
+  if(!s.exists()) return popup("No user");
   if(s.val().banned) return popup("You are banned");
   if(hash(p.value)!==s.val().password) return popup("Wrong password");
-  popup("Welcome back!");
   start(u.value);
 }
-
 function start(n){
   user=n;
   loginPage.classList.add("hidden");
   app.style.display="flex";
-  db.ref("online/"+user).set(true);
-  db.ref("online/"+user).onDisconnect().remove();
   if(user===MAIN_ADMIN) loadAdminPanel();
-  openGlobal(); loadUsers(); loadGroups();
+  openGlobal(); loadGroups();
 }
 
-/* ADMIN PANEL */
+/* ADMIN */
 function loadAdminPanel(){
   db.ref("users").on("value",s=>{
     let h='<div class="panel"><b>👑 Admin</b><br>';
@@ -135,24 +118,6 @@ function loadAdminPanel(){
   });
 }
 
-/* USERS */
-function loadUsers(){
-  db.ref("users").on("value",uSnap=>{
-    db.ref("online").on("value",oSnap=>{
-      users.innerHTML="";
-      uSnap.forEach(c=>{
-        if(c.key===user) return;
-        users.innerHTML+=`
-        <div>
-          <span class="dot ${oSnap.val()?.[c.key]?'online':'offline'}"></span>
-          ${c.key}
-          <button class="smallBtn" onclick="openDM('${c.key}')">DM</button>
-        </div>`;
-      });
-    });
-  });
-}
-
 /* GROUPS */
 function createGroup(){
   const name=prompt("Group name?");
@@ -160,36 +125,41 @@ function createGroup(){
   db.ref("groups/g"+Date.now()).set({
     name,
     members:{[user]:true},
-    admins:{[user]:true}
+    admins:{[user]:true},
+    requests:{}
   });
 }
 function loadGroups(){
   db.ref("groups").on("value",s=>{
     groups.innerHTML="";
     s.forEach(c=>{
-      if(c.val().members?.[user]){
-        groups.innerHTML+=`<div>${c.val().name}
-        <button onclick="openGroup('${c.key}','${c.val().name}')">Open</button></div>`;
-      }
+      const g=c.val();
+      groups.innerHTML+=`
+      <div>
+        ${g.name}
+        ${g.members?.[user]
+          ? `<button onclick="openGroup('${c.key}','${g.name}')">Open</button>`
+          : `<button onclick="requestJoin('${c.key}')">Request</button>`}
+      </div>`;
     });
   });
 }
-function openGroup(id,name){
-  chat="groups/"+id;
-  currentGroup=id;
-  title.textContent=name;
-  loadMessages();
-  loadGroupAdmin();
+function requestJoin(id){
+  db.ref("groups/"+id+"/requests/"+user).set(true);
+  popup("Join request sent");
 }
 
 /* GROUP ADMIN */
 function loadGroupAdmin(){
   db.ref("groups/"+currentGroup).on("value",s=>{
     const g=s.val();
-    if(!g || (!g.admins?.[user] && user!==MAIN_ADMIN)){
-      groupAdmin.innerHTML=""; return;
-    }
+    if(!g || (!g.admins?.[user] && user!==MAIN_ADMIN)){groupAdmin.innerHTML="";return;}
     let h='<div class="panel"><b>Group Admin</b><br>';
+    for(let r in g.requests||{}){
+      h+=`${r}
+      <button class="smallBtn" onclick="approve('${r}')">Approve</button>
+      <button class="smallBtn" onclick="reject('${r}')">Reject</button><br>`;
+    }
     for(let m in g.members){
       if(m===user) continue;
       h+=`${m}
@@ -201,6 +171,11 @@ function loadGroupAdmin(){
     groupAdmin.innerHTML=h+"</div>";
   });
 }
+function approve(u){
+  db.ref("groups/"+currentGroup+"/members/"+u).set(true);
+  db.ref("groups/"+currentGroup+"/requests/"+u).remove();
+}
+function reject(u){db.ref("groups/"+currentGroup+"/requests/"+u).remove();}
 function kick(u){db.ref("groups/"+currentGroup+"/members/"+u).remove();}
 function toggleAdmin(u){
   const r=db.ref("groups/"+currentGroup+"/admins/"+u);
@@ -212,23 +187,27 @@ function deleteGroup(){
 
 /* CHAT */
 function openGlobal(){chat="global";currentGroup=null;title.textContent="Global";loadMessages();}
-function openDM(o){chat="dm/"+[user,o].sort().join("_");currentGroup=null;title.textContent="DM "+o;loadMessages();}
+function openGroup(id,name){
+  chat="groups/"+id;
+  currentGroup=id;
+  title.textContent=name;
+  loadMessages();
+  loadGroupAdmin();
+}
 
 /* MESSAGES */
 function loadMessages(){
   if(msgRef) msgRef.off();
   messages.innerHTML="";
-  msgRef=db.ref("messages/"+chat).limitToLast(100);
+  msgRef=db.ref("messages/"+chat);
   msgRef.on("child_added",s=>{
     const d=s.val();
-    const canDelete=d.user===user||user===MAIN_ADMIN;
+    const canDel=d.user===user||user===MAIN_ADMIN;
     messages.innerHTML+=`
     <li>
       <b>${d.user}</b>: ${d.text}
-      <span class="time">${new Date(d.time).toLocaleTimeString()}</span>
-      ${canDelete?`<button class="smallBtn" onclick="db.ref('messages/${chat}/${s.key}').remove()">🗑</button>`:""}
+      ${canDel?`<button class="smallBtn" onclick="db.ref('messages/${chat}/${s.key}').remove()">🗑</button>`:""}
     </li>`;
-    messages.scrollTop=messages.scrollHeight;
   });
 }
 
@@ -239,13 +218,6 @@ msg.onkeydown=e=>{
     msg.value="";
   }
 };
-
-/* RESET */
-async function loginEmergencyReset(){
-  if(prompt("PIN")!=="0000") return;
-  await db.ref().remove();
-  location.reload();
-}
 </script>
 </body>
 </html>

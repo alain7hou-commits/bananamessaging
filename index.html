@@ -28,7 +28,6 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
 .online{background:#3ccf4e}
 .offline{background:#bbb}
 .time{font-size:10px;color:#888;margin-left:6px}
-.seen{font-size:10px;color:#3b82f6;margin-left:6px}
 </style>
 </head>
 
@@ -83,8 +82,7 @@ firebase.initializeApp({
 });
 const db=firebase.database();
 
-const MAIN_ADMIN="banana777";
-let user=null,chat="global",msgRef=null,isAdmin=false,currentGroup=null,typingRef=null;
+let user=null,chat="global",msgRef=null,typingRef=null,currentGroup=null;
 
 /* FILTER */
 const badWords=["fuck","shit","bitch","asshole","cunt","nigger","nigga","retard","fag"];
@@ -108,17 +106,18 @@ async function loginUser(){
   start(u.value);
 }
 function start(n){
-  user=n;isAdmin=(user===MAIN_ADMIN);
-  loginPage.classList.add("hidden");app.style.display="flex";
+  user=n;
+  loginPage.classList.add("hidden");
+  app.style.display="flex";
   db.ref("online/"+user).set(true);
   db.ref("online/"+user).onDisconnect().remove();
   openGlobal();loadUsers();loadGroups();
 }
 
-/* USERS + ONLINE */
+/* USERS */
 function loadUsers(){
   db.ref("users").on("value",uSnap=>{
-    db.ref("online").once("value",oSnap=>{
+    db.ref("online").on("value",oSnap=>{
       users.innerHTML="";
       uSnap.forEach(c=>{
         if(c.key===user) return;
@@ -133,12 +132,12 @@ function loadUsers(){
   });
 }
 
-/* GROUPS + ADMIN PANEL */
+/* GROUPS */
 function createGroup(){
   const name=prompt("Group name?");
-  const open=confirm("OK=open join, Cancel=request");
+  const open=confirm("OK=open join | Cancel=request");
   db.ref("groups/g"+Date.now()).set({
-    name,owner:user,open,
+    name,open,
     admins:{[user]:true},
     members:{[user]:true},
     requests:{}
@@ -149,7 +148,7 @@ function loadGroups(){
     groups.innerHTML="";
     s.forEach(c=>{
       const g=c.val();
-      const joined=g.members&&g.members[user];
+      const joined=g.members && g.members[user];
       groups.innerHTML+=`
       <div>${g.name}
       ${joined?`<button onclick="openGroup('${c.key}','${g.name}')">Open</button>`:
@@ -159,17 +158,26 @@ function loadGroups(){
     });
   });
 }
-function openGroup(id,n){
-  chat="groups/"+id;currentGroup=id;title.textContent=n;
-  loadMessages();loadGroupAdmin();
+function openGroup(id,name){
+  chat="groups/"+id;
+  currentGroup=id;
+  title.textContent=name;
+  loadMessages();
+  loadGroupAdmin();
 }
+
+/* ✅ FIXED GROUP REQUEST PANEL */
 function loadGroupAdmin(){
-  groupAdmin.innerHTML="";
-  db.ref("groups/"+currentGroup).once("value",s=>{
+  db.ref("groups/"+currentGroup).on("value",s=>{
     const g=s.val();
-    if(!g.admins||!g.admins[user]) return;
-    let html="<h4>Requests</h4>";
-    for(let r in g.requests){
+    if(!g || !g.admins || !g.admins[user]){
+      groupAdmin.innerHTML="";
+      return;
+    }
+    let html="<h4>Join Requests</h4>";
+    const req=g.requests||{};
+    if(!Object.keys(req).length) html+="<i>No requests</i>";
+    for(let r in req){
       html+=`${r}
       <button onclick="approve('${r}')">✔</button>
       <button onclick="deny('${r}')">❌</button><br>`;
@@ -177,29 +185,44 @@ function loadGroupAdmin(){
     groupAdmin.innerHTML=html;
   });
 }
-const approve=u=>db.ref("groups/"+currentGroup+"/members/"+u).set(true);
-const deny=u=>db.ref("groups/"+currentGroup+"/requests/"+u).remove();
-const joinGroup=id=>db.ref("groups/"+id+"/members/"+user).set(true);
-const requestJoin=id=>db.ref("groups/"+id+"/requests/"+user).set(true);
+function approve(u){
+  db.ref("groups/"+currentGroup+"/members/"+u).set(true);
+  db.ref("groups/"+currentGroup+"/requests/"+u).remove();
+}
+function deny(u){
+  db.ref("groups/"+currentGroup+"/requests/"+u).remove();
+}
+function joinGroup(id){
+  db.ref("groups/"+id+"/members/"+user).set(true);
+}
+function requestJoin(id){
+  db.ref("groups/"+id+"/requests/"+user).set(true);
+}
 
 /* CHAT */
-function openGlobal(){chat="global";currentGroup=null;title.textContent="Global";loadMessages();}
-function openDM(o){chat="dm/"+[user,o].sort().join("_");currentGroup=null;title.textContent="DM "+o;loadMessages();}
+function openGlobal(){
+  chat="global";
+  currentGroup=null;
+  title.textContent="Global";
+  loadMessages();
+}
+function openDM(o){
+  chat="dm/"+[user,o].sort().join("_");
+  currentGroup=null;
+  title.textContent="DM "+o;
+  loadMessages();
+}
 
-/* MESSAGES + TIME + SEEN */
+/* MESSAGES */
 function loadMessages(){
   if(msgRef) msgRef.off();
   messages.innerHTML="";
   msgRef=db.ref("messages/"+chat);
   msgRef.on("child_added",s=>{
     const d=s.val();
-    db.ref("seen/"+chat+"/"+s.key+"/"+user).set(true);
     messages.innerHTML+=`
-    <li>
-      <b>${d.user}</b>: ${d.text}
-      <span class="time">${new Date(d.time).toLocaleTimeString()}</span>
-      ${d.user===user?`<span class="seen">✔✔</span>`:""}
-    </li>`;
+    <li><b>${d.user}</b>: ${d.text}
+    <span class="time">${new Date(d.time).toLocaleTimeString()}</span></li>`;
     messages.scrollTop=messages.scrollHeight;
   });
   setupTyping();
@@ -210,30 +233,44 @@ function setupTyping(){
   if(typingRef) typingRef.off();
   typingRef=db.ref("typing/"+chat);
   typingRef.on("value",s=>{
-    const u=Object.keys(s.val()||{}).filter(x=>x!==user);
-    typing.textContent=u.length?u.join(", ")+" typing…":"";
+    const t=Object.keys(s.val()||{}).filter(x=>x!==user);
+    typing.textContent=t.length?t.join(", ")+" typing…":"";
   });
 }
 msg.oninput=()=>{
   db.ref("typing/"+chat+"/"+user).set(true);
   clearTimeout(window.t);
-  window.t=setTimeout(()=>db.ref("typing/"+chat+"/"+user).remove(),1200);
+  window.t=setTimeout(()=>db.ref("typing/"+chat+"/"+user).remove(),1000);
 };
 
 /* SEND */
-msg.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();send();}};
+msg.onkeydown=e=>{
+  if(e.key==="Enter"){
+    e.preventDefault();
+    send();
+  }
+};
 function send(){
   if(!msg.value.trim()) return;
   db.ref("messages/"+chat).push({user,text:filterText(msg.value),time:Date.now()});
-  msg.value="";db.ref("typing/"+chat+"/"+user).remove();
+  msg.value="";
+  db.ref("typing/"+chat+"/"+user).remove();
 }
 
 /* DELETE */
-function deleteMe(){if(confirm("Delete?")){db.ref("users/"+user).remove();location.reload();}}
-async function loginEmergencyReset(){if(prompt("Code")!=="0000")return;await db.ref().remove();location.reload();}
+function deleteMe(){
+  if(confirm("Delete account?")){
+    db.ref("users/"+user).remove();
+    location.reload();
+  }
+}
+async function loginEmergencyReset(){
+  if(prompt("Code")!=="0000") return;
+  await db.ref().remove();
+  location.reload();
+}
 
 const uEl=u,pEl=p;
 </script>
 </body>
 </html>
-

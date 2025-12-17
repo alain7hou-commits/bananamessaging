@@ -13,20 +13,21 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
 #loginBox button{background:#ffb347;border:none;color:#fff;border-radius:6px;cursor:pointer}
 .resetBtn{background:#ff5555!important}
 
-#app{display:none;height:100vh}
+#app{display:none;height:100vh;display:flex}
 #sidebar{width:260px;background:#fff;border-right:1px solid #ddd;padding:10px;overflow-y:auto}
 #chat{flex:1;display:flex;flex-direction:column}
 #top{background:#ffb347;color:white;padding:10px;font-weight:bold}
 #messages{flex:1;overflow-y:auto;padding:10px;list-style:none}
 #messages li{background:#fff;padding:8px;margin-bottom:6px;border-radius:6px;font-size:14px}
-#messages img{max-width:200px;border-radius:6px;display:block;margin-top:6px}
-#sendBar{display:flex;gap:6px;padding:8px;background:#eee}
-#sendBar input{flex:1;padding:8px}
+#sendBar{padding:8px;background:#eee}
+#sendBar input{width:100%;padding:8px}
 .smallBtn{font-size:11px;margin-left:4px}
-.notice{color:red;font-weight:bold;margin-top:10px}
-#typing{font-size:12px;color:#555;padding:0 10px}
-.time{font-size:10px;color:#888;margin-left:6px}
 .panel{background:#fafafa;border:1px solid #ddd;padding:6px;margin-bottom:10px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.online{background:#3ccf4e}
+.offline{background:#bbb}
+#typing{font-size:12px;color:#666;padding:0 10px}
+.time{font-size:10px;color:#888;margin-left:6px}
 </style>
 </head>
 
@@ -40,7 +41,7 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
     <button onclick="signup()">Sign Up</button>
     <button onclick="loginUser()">Login</button>
     <button class="resetBtn" onclick="loginEmergencyReset()">🚨 Emergency Reset</button>
-    <div id="banMsg" class="notice hidden">🚫 YOU ARE BANNED</div>
+    <div id="banMsg" class="hidden">🚫 YOU ARE BANNED</div>
   </div>
 </div>
 
@@ -57,9 +58,6 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
 
     <h4>Groups</h4>
     <div id="groups"></div>
-
-    <hr>
-    <button onclick="deleteMe()">❌ Delete My Account</button>
   </div>
 
   <div id="chat">
@@ -67,7 +65,7 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
     <ul id="messages"></ul>
     <div id="typing"></div>
     <div id="sendBar">
-      <input id="msg" placeholder="Type message or image URL">
+      <input id="msg" placeholder="Type message and press Enter">
     </div>
   </div>
 </div>
@@ -83,40 +81,36 @@ firebase.initializeApp({
 const db=firebase.database();
 const MAIN_ADMIN="banana777";
 
-let user=null,chat="global",msgRef=null,currentGroup=null,typingRef=null;
+let user=null, chat="global", msgRef=null, typingRef=null, currentGroup=null;
 
-/* INIT PIN */
-db.ref("settings/emergencyPin").once("value",s=>{
-  if(!s.exists()) db.ref("settings/emergencyPin").set("0000");
-});
-
-/* AUTH */
+/* HASH */
 const hash=t=>[...t].reduce((h,c)=>((h<<5)+h)+c.charCodeAt(0),5381).toString();
 
+/* AUTH */
 async function signup(){
-  if(!u.value||!p.value) return alert("Fill fields");
+  if(!u.value||!p.value) return;
   if((await db.ref("users/"+u.value).once("value")).exists()) return alert("Exists");
   await db.ref("users/"+u.value).set({password:hash(p.value),banned:false});
   start(u.value);
 }
-
 async function loginUser(){
   const s=await db.ref("users/"+u.value).once("value");
-  if(!s.exists()) return alert("No user");
+  if(!s.exists()) return;
   if(s.val().banned) return banMsg.classList.remove("hidden");
-  if(hash(p.value)!==s.val().password) return alert("Wrong");
+  if(hash(p.value)!==s.val().password) return;
   start(u.value);
 }
-
 function start(n){
   user=n;
   loginPage.classList.add("hidden");
   app.style.display="flex";
+  db.ref("online/"+user).set(true);
+  db.ref("online/"+user).onDisconnect().remove();
   if(user===MAIN_ADMIN) loadAdminPanel();
-  openGlobal();loadUsers();loadGroups();
+  openGlobal(); loadUsers(); loadGroups();
 }
 
-/* ADMIN PANEL */
+/* ADMIN */
 function loadAdminPanel(){
   db.ref("users").on("value",s=>{
     let h='<div class="panel"><b>👑 Admin</b><br>';
@@ -124,31 +118,72 @@ function loadAdminPanel(){
       if(c.key===user) return;
       const d=c.val();
       h+=`${c.key}
-      <button class="smallBtn" onclick="setBan('${c.key}',${!d.banned})">${d.banned?'Unban':'Ban'}</button><br>`;
+      <button class="smallBtn" onclick="db.ref('users/${c.key}/banned').set(${!d.banned})">
+      ${d.banned?'Unban':'Ban'}</button><br>`;
     });
-    h+=`<hr>
-    <button onclick="changePin()">Change Reset PIN</button>`;
     adminPanel.innerHTML=h+"</div>";
   });
 }
-function setBan(u,v){db.ref("users/"+u+"/banned").set(v);}
-function changePin(){
-  const p=prompt("New Emergency PIN");
-  if(p) db.ref("settings/emergencyPin").set(p);
+
+/* USERS + ONLINE */
+function loadUsers(){
+  db.ref("users").on("value",uSnap=>{
+    db.ref("online").on("value",oSnap=>{
+      users.innerHTML="";
+      uSnap.forEach(c=>{
+        if(c.key===user) return;
+        const on=oSnap.val()&&oSnap.val()[c.key];
+        users.innerHTML+=`
+        <div>
+          <span class="dot ${on?'online':'offline'}"></span>
+          ${c.key}
+          <button class="smallBtn" onclick="openDM('${c.key}')">DM</button>
+        </div>`;
+      });
+    });
+  });
 }
 
-/* GROUP ADMIN (FIXED VISIBILITY) */
+/* GROUPS */
+function createGroup(){
+  const name=prompt("Group name?");
+  db.ref("groups/g"+Date.now()).set({
+    name,
+    members:{[user]:true},
+    admins:{[user]:true}
+  });
+}
+function loadGroups(){
+  db.ref("groups").on("value",s=>{
+    groups.innerHTML="";
+    s.forEach(c=>{
+      const g=c.val();
+      if(g.members?.[user]){
+        groups.innerHTML+=`<div>${g.name}
+        <button onclick="openGroup('${c.key}','${g.name}')">Open</button></div>`;
+      }
+    });
+  });
+}
+function openGroup(id,name){
+  chat="groups/"+id;
+  currentGroup=id;
+  title.textContent=name;
+  loadMessages();
+  loadGroupAdmin();
+}
+
+/* GROUP ADMIN — ONLY KICK */
 function loadGroupAdmin(){
-  db.ref("groups/"+currentGroup).on("value",s=>{
+  db.ref("groups/"+currentGroup).once("value",s=>{
     const g=s.val();
-    if(!g) return;
-    const isAdmin=g.admins?.[user]||user===MAIN_ADMIN;
-    if(!isAdmin){groupAdmin.innerHTML="";return;}
-    let h='<div class="panel"><b>Group Control</b><br>';
+    if(!g || !g.admins?.[user] && user!==MAIN_ADMIN){
+      groupAdmin.innerHTML=""; return;
+    }
+    let h='<div class="panel"><b>Group Admin</b><br>';
     for(let m in g.members){
       if(m===user) continue;
-      h+=`${m}
-      <button class="smallBtn" onclick="kick('${m}')">Kick</button><br>`;
+      h+=`${m} <button class="smallBtn" onclick="kick('${m}')">Kick</button><br>`;
     }
     groupAdmin.innerHTML=h+"</div>";
   });
@@ -156,6 +191,10 @@ function loadGroupAdmin(){
 function kick(u){
   db.ref("groups/"+currentGroup+"/members/"+u).remove();
 }
+
+/* CHAT */
+function openGlobal(){chat="global";currentGroup=null;title.textContent="Global";loadMessages();}
+function openDM(o){chat="dm/"+[user,o].sort().join("_");currentGroup=null;title.textContent="DM "+o;loadMessages();}
 
 /* MESSAGES */
 function loadMessages(){
@@ -165,31 +204,40 @@ function loadMessages(){
 
   msgRef.on("child_added",s=>{
     const d=s.val();
-    const img=/^https?:\/\/.+\.(png|jpg|jpeg|gif)$/i.test(d.text);
-    const canDel=(d.user===user||user===MAIN_ADMIN);
-    const li=document.createElement("li");
-    li.id=s.key;
-    li.innerHTML=`
-      <b>${d.user}</b>: ${img?`<img src="${d.text}">`:d.text}
+    messages.innerHTML+=`
+    <li id="${s.key}">
+      <b>${d.user}</b>: ${d.text}
       <span class="time">${new Date(d.time).toLocaleTimeString()}</span>
-      ${canDel?`<button class="smallBtn" onclick="deleteMsg('${s.key}')">❌</button>`:""}
-    `;
-    messages.appendChild(li);
+    </li>`;
     messages.scrollTop=messages.scrollHeight;
   });
+}
 
-  msgRef.on("child_removed",s=>{
-    document.getElementById(s.key)?.remove();
-  });
-}
-function deleteMsg(id){
-  db.ref("messages/"+chat+"/"+id).remove();
-}
+/* TYPING */
+msg.oninput=()=>{
+  db.ref("typing/"+chat+"/"+user).set(true);
+  clearTimeout(window.tt);
+  window.tt=setTimeout(()=>db.ref("typing/"+chat+"/"+user).remove(),1000);
+};
+db.ref("typing/"+chat).on("value",s=>{
+  const t=Object.keys(s.val()||{}).filter(x=>x!==user);
+  typing.textContent=t.length?t.join(", ")+" typing…":"";
+});
+
+/* SEND */
+msg.onkeydown=e=>{
+  if(e.key==="Enter"){
+    db.ref("messages/"+chat).push({
+      user,text:msg.value,time:Date.now()
+    });
+    msg.value="";
+    db.ref("typing/"+chat+"/"+user).remove();
+  }
+};
 
 /* RESET */
 async function loginEmergencyReset(){
-  const pin=(await db.ref("settings/emergencyPin").once("value")).val();
-  if(prompt("PIN")!==pin) return;
+  if(prompt("PIN")!=="0000") return;
   await db.ref().remove();
   location.reload();
 }

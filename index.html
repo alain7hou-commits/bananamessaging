@@ -23,6 +23,7 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
 #sendBar input{flex:1;padding:8px}
 .smallBtn{font-size:11px;margin-left:4px}
 .notice{color:red;font-weight:bold;margin-top:10px}
+#typing{font-size:12px;color:#555;padding:0 10px}
 </style>
 </head>
 
@@ -53,14 +54,13 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
 
     <hr>
     <button onclick="deleteMe()">❌ Delete My Account</button>
-    <button onclick="changeResetPin()">🔐 Change Reset Code</button>
     <button onclick="emergencyReset()">🚨 Emergency Reset</button>
   </div>
 
   <div id="chat">
     <div id="top"><span id="title">Global</span></div>
     <ul id="messages"></ul>
-
+    <div id="typing"></div>
     <div id="sendBar">
       <input id="msg" placeholder="Type a message">
     </div>
@@ -78,14 +78,12 @@ firebase.initializeApp({
 const db=firebase.database();
 
 const MAIN_ADMIN="banana777";
-let user=null,chat="global",msgRef=null,isAdmin=false;
+let user=null,chat="global",msgRef=null,isAdmin=false,currentGroup=null,typingRef=null;
 
 /* BAD WORD FILTER */
 const badWords=["fuck","shit","bitch","asshole","cunt","nigger","nigga","retard","fag"];
 function filterText(t){
-  badWords.forEach(w=>{
-    t=t.replace(new RegExp(w,"gi"),"***");
-  });
+  badWords.forEach(w=>t=t.replace(new RegExp(w,"gi"),"***"));
   return t;
 }
 
@@ -101,7 +99,7 @@ async function signup(){
   const u=uEl.value,p=pEl.value;
   if(!u||!p) return alert("Fill fields");
   if((await db.ref("users/"+u).once("value")).exists()) return alert("User exists");
-  await db.ref("users/"+u).set({password:hash(p),banned:false});
+  await db.ref("users/"+u).set({password:hash(p),banned:false,admin:false});
   start(u);
 }
 
@@ -110,10 +108,7 @@ async function loginUser(){
   const u=uEl.value,p=pEl.value;
   const s=await db.ref("users/"+u).once("value");
   if(!s.exists()) return alert("No user");
-  if(s.val().banned){
-    banMsg.classList.remove("hidden");
-    return;
-  }
+  if(s.val().banned){banMsg.classList.remove("hidden");return;}
   if(hash(p)!==s.val().password) return alert("Wrong password");
   start(u);
 }
@@ -139,20 +134,24 @@ function loadUsers(){
       <div>${c.key}
         <button class="smallBtn" onclick="openDM('${c.key}')">DM</button>
         ${isAdmin?`
-        <button class="smallBtn" onclick="ban('${c.key}',true)">Ban</button>
-        <button class="smallBtn" onclick="ban('${c.key}',false)">Unban</button>`:""}
+        <button class="smallBtn" onclick="setBan('${c.key}',true)">Ban</button>
+        <button class="smallBtn" onclick="setBan('${c.key}',false)">Unban</button>
+        <button class="smallBtn" onclick="setAdmin('${c.key}',true)">Promote</button>
+        <button class="smallBtn" onclick="setAdmin('${c.key}',false)">Demote</button>`:""}
       </div>`;
     });
   });
 }
-function ban(u,v){db.ref("users/"+u+"/banned").set(v);}
+function setBan(u,v){db.ref("users/"+u+"/banned").set(v);}
+function setAdmin(u,v){db.ref("users/"+u+"/admin").set(v);}
 
 /* GROUPS */
 function createGroup(){
   const name=prompt("Group name?");
-  const open=confirm("OK = Open group\nCancel = Request to join");
+  const open=confirm("OK = Open join\nCancel = Request join");
   db.ref("groups/group_"+Date.now()).set({
     name,owner:user,open,
+    admins:{[user]:true},
     members:{[user]:true},
     requests:{}
   });
@@ -164,8 +163,7 @@ function loadGroups(){
       const g=c.val();
       const joined=g.members && g.members[user];
       groups.innerHTML+=`
-      <div>
-        ${g.name}
+      <div>${g.name}
         ${joined?`<button onclick="openGroup('${c.key}','${g.name}')">Open</button>`:
         g.open?`<button onclick="joinGroup('${c.key}')">Join</button>`:
         `<button onclick="requestJoin('${c.key}')">Request</button>`}
@@ -175,11 +173,16 @@ function loadGroups(){
 }
 function joinGroup(id){db.ref("groups/"+id+"/members/"+user).set(true);}
 function requestJoin(id){db.ref("groups/"+id+"/requests/"+user).set(true);}
-function openGroup(id,n){chat="groups/"+id;title.textContent=n;loadMessages();}
+function openGroup(id,n){
+  chat="groups/"+id;
+  currentGroup=id;
+  title.textContent=n;
+  loadMessages();
+}
 
 /* CHAT */
-function openGlobal(){chat="global";title.textContent="Global";loadMessages();}
-function openDM(o){chat="dm/"+[user,o].sort().join("_");title.textContent="DM "+o;loadMessages();}
+function openGlobal(){chat="global";currentGroup=null;title.textContent="Global";loadMessages();}
+function openDM(o){chat="dm/"+[user,o].sort().join("_");currentGroup=null;title.textContent="DM "+o;loadMessages();}
 
 /* MESSAGES */
 function loadMessages(){
@@ -187,21 +190,45 @@ function loadMessages(){
   messages.innerHTML="";
   msgRef=db.ref("messages/"+chat);
   msgRef.on("child_added",s=>{
-    messages.innerHTML+=`<li><b>${s.val().user}</b>: ${s.val().text}</li>`;
+    const d=s.val();
+    const canDel=(d.user===user||isAdmin);
+    messages.innerHTML+=`
+    <li id="${s.key}">
+      <b>${d.user}</b>: ${d.text}
+      ${canDel?`<button class="smallBtn" onclick="deleteMsg('${s.key}')">❌</button>`:""}
+    </li>`;
+    messages.scrollTop=messages.scrollHeight;
+  });
+  setupTyping();
+}
+function deleteMsg(id){db.ref("messages/"+chat+"/"+id).remove();}
+
+/* TYPING INDICATOR (REAL-TIME) */
+function setupTyping(){
+  if(typingRef) typingRef.off();
+  typing.textContent="";
+  typingRef=db.ref("typing/"+chat);
+  typingRef.on("value",s=>{
+    const usersTyping=Object.keys(s.val()||{}).filter(u=>u!==user);
+    typing.textContent=usersTyping.length?usersTyping.join(", ")+" typing…":"";
   });
 }
 
-/* SEND WITH ENTER */
+msg.addEventListener("input",()=>{
+  db.ref("typing/"+chat+"/"+user).set(true);
+  clearTimeout(window.t);
+  window.t=setTimeout(()=>db.ref("typing/"+chat+"/"+user).remove(),1200);
+});
+
+/* SEND */
 msg.addEventListener("keydown",e=>{
-  if(e.key==="Enter"&&!e.shiftKey){
-    e.preventDefault();
-    send();
-  }
+  if(e.key==="Enter"){e.preventDefault();send();}
 });
 function send(){
   if(!msg.value.trim()) return;
   db.ref("messages/"+chat).push({user,text:filterText(msg.value)});
   msg.value="";
+  db.ref("typing/"+chat+"/"+user).remove();
 }
 
 /* RESET + DELETE */
@@ -212,7 +239,6 @@ async function loginEmergencyReset(){
   await db.ref().remove();
   location.reload();
 }
-function changeResetPin(){alert("Coming soon (admin-only)");}
 function emergencyReset(){loginEmergencyReset();}
 
 const uEl=u,pEl=p;
@@ -220,3 +246,4 @@ const uEl=u,pEl=p;
 
 </body>
 </html>
+

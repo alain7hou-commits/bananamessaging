@@ -19,6 +19,7 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
 #top{background:#ffb347;color:white;padding:10px;font-weight:bold}
 #messages{flex:1;overflow-y:auto;padding:10px;list-style:none}
 #messages li{background:#fff;padding:8px;margin-bottom:6px;border-radius:6px;font-size:14px}
+#messages img{max-width:200px;border-radius:6px;display:block;margin-top:6px}
 #sendBar{display:flex;gap:6px;padding:8px;background:#eee}
 #sendBar input{flex:1;padding:8px}
 .smallBtn{font-size:11px;margin-left:4px}
@@ -28,11 +29,12 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
 .online{background:#3ccf4e}
 .offline{background:#bbb}
 .time{font-size:10px;color:#888;margin-left:6px}
+.panel{background:#fafafa;border:1px solid #ddd;padding:6px;margin-bottom:10px}
 </style>
 </head>
 
 <body>
-
+<!-- LOGIN -->
 <div id="loginPage">
   <div id="loginBox">
     <h3>🍌 Banana Messaging</h3>
@@ -45,10 +47,13 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
   </div>
 </div>
 
+<!-- APP -->
 <div id="app">
   <div id="sidebar">
     <button onclick="openGlobal()">🌍 Global</button>
     <button onclick="createGroup()">➕ Create Group</button>
+
+    <div id="adminPanel"></div>
 
     <h4>Users</h4>
     <div id="users"></div>
@@ -67,7 +72,7 @@ body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
     <ul id="messages"></ul>
     <div id="typing"></div>
     <div id="sendBar">
-      <input id="msg" placeholder="Type a message">
+      <input id="msg" placeholder="Type message or image URL">
     </div>
   </div>
 </div>
@@ -81,8 +86,8 @@ firebase.initializeApp({
   databaseURL:"https://bananamessagingsite-default-rtdb.firebaseio.com"
 });
 const db=firebase.database();
-
 const MAIN_ADMIN="banana777";
+
 let user=null,chat="global",msgRef=null,typingRef=null,currentGroup=null;
 
 /* FILTER */
@@ -105,9 +110,9 @@ async function signup(){
 }
 
 async function loginUser(){
-  const snap=await db.ref("users/"+u.value).once("value");
-  if(!snap.exists()) return alert("No user");
-  const d=snap.val();
+  const s=await db.ref("users/"+u.value).once("value");
+  if(!s.exists()) return alert("No user");
+  const d=s.val();
   if(d.banned) return banMsg.classList.remove("hidden");
   if(hash(p.value)!==d.password) return alert("Wrong password");
   start(u.value);
@@ -119,8 +124,26 @@ function start(n){
   app.style.display="flex";
   db.ref("online/"+user).set(true);
   db.ref("online/"+user).onDisconnect().remove();
+  if(user===MAIN_ADMIN) loadAdminPanel();
   openGlobal();loadUsers();loadGroups();
 }
+
+/* MAIN ADMIN PANEL */
+function loadAdminPanel(){
+  db.ref("users").on("value",s=>{
+    let h='<div class="panel"><b>👑 Admin Panel</b><br>';
+    s.forEach(c=>{
+      if(c.key===user) return;
+      const d=c.val();
+      h+=`${c.key}
+      <button class="smallBtn" onclick="setBan('${c.key}',${!d.banned})">${d.banned?'Unban':'Ban'}</button>
+      <button class="smallBtn" onclick="setAdmin('${c.key}',${!d.admin})">${d.admin?'Demote':'Promote'}</button><br>`;
+    });
+    adminPanel.innerHTML=h+"</div>";
+  });
+}
+function setBan(u,v){db.ref("users/"+u+"/banned").set(v);}
+function setAdmin(u,v){db.ref("users/"+u+"/admin").set(v);}
 
 /* USERS */
 function loadUsers(){
@@ -166,6 +189,7 @@ function loadGroups(){
     });
   });
 }
+
 function openGroup(id,name){
   chat="groups/"+id;
   currentGroup=id;
@@ -174,7 +198,7 @@ function openGroup(id,name){
   loadGroupAdmin();
 }
 
-/* GROUP ADMIN */
+/* GROUP ADMIN PANEL */
 function loadGroupAdmin(){
   db.ref("groups/"+currentGroup).on("value",s=>{
     const g=s.val();
@@ -182,24 +206,18 @@ function loadGroupAdmin(){
       groupAdmin.innerHTML="";
       return;
     }
-    let html="<h4>Join Requests</h4>";
-    const r=g.requests||{};
-    if(!Object.keys(r).length) html+="<i>No requests</i>";
-    for(let u in r){
-      html+=`${u}
-      <button onclick="approve('${u}')">✔</button>
-      <button onclick="deny('${u}')">❌</button><br>`;
+    let h='<div class="panel"><b>Group Admin</b><br>';
+    for(let m in g.members){
+      if(m===user) continue;
+      h+=`${m}
+      <button class="smallBtn" onclick="kick('${m}')">Kick</button>
+      <button class="smallBtn" onclick="promote('${m}')">Promote</button><br>`;
     }
-    groupAdmin.innerHTML=html;
+    groupAdmin.innerHTML=h+"</div>";
   });
 }
-function approve(u){
-  db.ref("groups/"+currentGroup+"/members/"+u).set(true);
-  db.ref("groups/"+currentGroup+"/requests/"+u).remove();
-}
-function deny(u){
-  db.ref("groups/"+currentGroup+"/requests/"+u).remove();
-}
+function kick(u){db.ref("groups/"+currentGroup+"/members/"+u).remove();}
+function promote(u){db.ref("groups/"+currentGroup+"/admins/"+u).set(true);}
 function joinGroup(id){db.ref("groups/"+id+"/members/"+user).set(true);}
 function requestJoin(id){db.ref("groups/"+id+"/requests/"+user).set(true);}
 
@@ -207,29 +225,23 @@ function requestJoin(id){db.ref("groups/"+id+"/requests/"+user).set(true);}
 function openGlobal(){chat="global";currentGroup=null;title.textContent="Global";loadMessages();}
 function openDM(o){chat="dm/"+[user,o].sort().join("_");currentGroup=null;title.textContent="DM "+o;loadMessages();}
 
-/* MESSAGES + DELETE */
+/* MESSAGES */
 function loadMessages(){
   if(msgRef) msgRef.off();
   messages.innerHTML="";
-  msgRef=db.ref("messages/"+chat);
+  msgRef=db.ref("messages/"+chat).limitToLast(100);
   msgRef.on("child_added",s=>{
     const d=s.val();
-    const canDelete=(d.user===user||user===MAIN_ADMIN);
+    const img=/^https?:\/\/.+\.(png|jpg|jpeg|gif)$/i.test(d.text);
     messages.innerHTML+=`
-    <li id="${s.key}">
-      <b>${d.user}</b>: ${d.text}
+    <li>
+      <b>${d.user}</b>:
+      ${img?`<img src="${d.text}">`:d.text}
       <span class="time">${new Date(d.time).toLocaleTimeString()}</span>
-      ${canDelete?`<button class="smallBtn" onclick="deleteMsg('${s.key}')">❌</button>`:""}
     </li>`;
     messages.scrollTop=messages.scrollHeight;
   });
   setupTyping();
-}
-function deleteMsg(id){
-  if(confirm("Delete message?")){
-    db.ref("messages/"+chat+"/"+id).remove();
-    document.getElementById(id)?.remove();
-  }
 }
 
 /* TYPING */
@@ -251,12 +263,16 @@ msg.oninput=()=>{
 msg.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();send();}};
 function send(){
   if(!msg.value.trim()) return;
-  db.ref("messages/"+chat).push({user,text:filterText(msg.value),time:Date.now()});
+  db.ref("messages/"+chat).push({
+    user,
+    text:filterText(msg.value),
+    time:Date.now()
+  });
   msg.value="";
   db.ref("typing/"+chat+"/"+user).remove();
 }
 
-/* DELETE ACCOUNT + RESET */
+/* ACCOUNT */
 function deleteMe(){
   if(confirm("Delete account?")){
     db.ref("users/"+user).remove();
@@ -271,5 +287,6 @@ async function loginEmergencyReset(){
 </script>
 </body>
 </html>
+
 
 Update Banana Messaging app

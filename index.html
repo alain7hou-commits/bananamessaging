@@ -82,6 +82,7 @@ firebase.initializeApp({
 });
 const db=firebase.database();
 
+const MAIN_ADMIN="banana777";
 let user=null,chat="global",msgRef=null,typingRef=null,currentGroup=null;
 
 /* FILTER */
@@ -94,17 +95,24 @@ const hash=t=>[...t].reduce((h,c)=>((h<<5)+h)+c.charCodeAt(0),5381).toString();
 /* AUTH */
 async function signup(){
   if(!u.value||!p.value) return alert("Fill fields");
-  if((await db.ref("users/"+u.value).once("value")).exists()) return alert("Exists");
-  await db.ref("users/"+u.value).set({password:hash(p.value),banned:false});
+  if((await db.ref("users/"+u.value).once("value")).exists()) return alert("User exists");
+  await db.ref("users/"+u.value).set({
+    password:hash(p.value),
+    banned:false,
+    admin:u.value===MAIN_ADMIN
+  });
   start(u.value);
 }
+
 async function loginUser(){
-  const s=await db.ref("users/"+u.value).once("value");
-  if(!s.exists()) return alert("No user");
-  if(s.val().banned) return banMsg.classList.remove("hidden");
-  if(hash(p.value)!==s.val().password) return alert("Wrong");
+  const snap=await db.ref("users/"+u.value).once("value");
+  if(!snap.exists()) return alert("No user");
+  const d=snap.val();
+  if(d.banned) return banMsg.classList.remove("hidden");
+  if(hash(p.value)!==d.password) return alert("Wrong password");
   start(u.value);
 }
+
 function start(n){
   user=n;
   loginPage.classList.add("hidden");
@@ -148,7 +156,7 @@ function loadGroups(){
     groups.innerHTML="";
     s.forEach(c=>{
       const g=c.val();
-      const joined=g.members && g.members[user];
+      const joined=g.members&&g.members[user];
       groups.innerHTML+=`
       <div>${g.name}
       ${joined?`<button onclick="openGroup('${c.key}','${g.name}')">Open</button>`:
@@ -166,7 +174,7 @@ function openGroup(id,name){
   loadGroupAdmin();
 }
 
-/* ✅ FIXED GROUP REQUEST PANEL */
+/* GROUP ADMIN */
 function loadGroupAdmin(){
   db.ref("groups/"+currentGroup).on("value",s=>{
     const g=s.val();
@@ -175,12 +183,12 @@ function loadGroupAdmin(){
       return;
     }
     let html="<h4>Join Requests</h4>";
-    const req=g.requests||{};
-    if(!Object.keys(req).length) html+="<i>No requests</i>";
-    for(let r in req){
-      html+=`${r}
-      <button onclick="approve('${r}')">✔</button>
-      <button onclick="deny('${r}')">❌</button><br>`;
+    const r=g.requests||{};
+    if(!Object.keys(r).length) html+="<i>No requests</i>";
+    for(let u in r){
+      html+=`${u}
+      <button onclick="approve('${u}')">✔</button>
+      <button onclick="deny('${u}')">❌</button><br>`;
     }
     groupAdmin.innerHTML=html;
   });
@@ -192,40 +200,36 @@ function approve(u){
 function deny(u){
   db.ref("groups/"+currentGroup+"/requests/"+u).remove();
 }
-function joinGroup(id){
-  db.ref("groups/"+id+"/members/"+user).set(true);
-}
-function requestJoin(id){
-  db.ref("groups/"+id+"/requests/"+user).set(true);
-}
+function joinGroup(id){db.ref("groups/"+id+"/members/"+user).set(true);}
+function requestJoin(id){db.ref("groups/"+id+"/requests/"+user).set(true);}
 
 /* CHAT */
-function openGlobal(){
-  chat="global";
-  currentGroup=null;
-  title.textContent="Global";
-  loadMessages();
-}
-function openDM(o){
-  chat="dm/"+[user,o].sort().join("_");
-  currentGroup=null;
-  title.textContent="DM "+o;
-  loadMessages();
-}
+function openGlobal(){chat="global";currentGroup=null;title.textContent="Global";loadMessages();}
+function openDM(o){chat="dm/"+[user,o].sort().join("_");currentGroup=null;title.textContent="DM "+o;loadMessages();}
 
-/* MESSAGES */
+/* MESSAGES + DELETE */
 function loadMessages(){
   if(msgRef) msgRef.off();
   messages.innerHTML="";
   msgRef=db.ref("messages/"+chat);
   msgRef.on("child_added",s=>{
     const d=s.val();
+    const canDelete=(d.user===user||user===MAIN_ADMIN);
     messages.innerHTML+=`
-    <li><b>${d.user}</b>: ${d.text}
-    <span class="time">${new Date(d.time).toLocaleTimeString()}</span></li>`;
+    <li id="${s.key}">
+      <b>${d.user}</b>: ${d.text}
+      <span class="time">${new Date(d.time).toLocaleTimeString()}</span>
+      ${canDelete?`<button class="smallBtn" onclick="deleteMsg('${s.key}')">❌</button>`:""}
+    </li>`;
     messages.scrollTop=messages.scrollHeight;
   });
   setupTyping();
+}
+function deleteMsg(id){
+  if(confirm("Delete message?")){
+    db.ref("messages/"+chat+"/"+id).remove();
+    document.getElementById(id)?.remove();
+  }
 }
 
 /* TYPING */
@@ -244,12 +248,7 @@ msg.oninput=()=>{
 };
 
 /* SEND */
-msg.onkeydown=e=>{
-  if(e.key==="Enter"){
-    e.preventDefault();
-    send();
-  }
-};
+msg.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();send();}};
 function send(){
   if(!msg.value.trim()) return;
   db.ref("messages/"+chat).push({user,text:filterText(msg.value),time:Date.now()});
@@ -257,7 +256,7 @@ function send(){
   db.ref("typing/"+chat+"/"+user).remove();
 }
 
-/* DELETE */
+/* DELETE ACCOUNT + RESET */
 function deleteMe(){
   if(confirm("Delete account?")){
     db.ref("users/"+user).remove();
@@ -269,8 +268,7 @@ async function loginEmergencyReset(){
   await db.ref().remove();
   location.reload();
 }
-
-const uEl=u,pEl=p;
 </script>
 </body>
 </html>
+

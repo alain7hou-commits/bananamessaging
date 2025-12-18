@@ -5,32 +5,40 @@
 <title>Banana Messaging 🍌</title>
 
 <style>
-body{margin:0;font-family:Segoe UI;background:#f3f3f3;height:100vh}
+body{margin:0;font-family:Segoe UI;background:#f2f3f5;height:100vh}
 .hidden{display:none!important}
+
 #loginPage{height:100vh;display:flex;align-items:center;justify-content:center}
-#loginBox{background:#fff;padding:30px;width:320px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.15);text-align:center}
-#loginBox input,#loginBox button{width:100%;padding:10px;margin-top:10px}
-#loginBox button{background:#ffb347;border:none;color:#fff;border-radius:6px;cursor:pointer}
-.resetBtn{background:#ff5555!important}
+#loginBox{background:#fff;padding:30px;width:320px;border-radius:14px;box-shadow:0 15px 40px rgba(0,0,0,.15);text-align:center}
+#loginBox input,#loginBox button{width:100%;padding:11px;margin-top:10px;font-size:14px}
+#loginBox button{background:#ffb347;border:none;color:#fff;border-radius:8px;cursor:pointer}
+.resetBtn{background:#ff4d4d!important}
 
 #popup{position:fixed;top:20px;left:50%;transform:translateX(-50%);
-background:#333;color:#fff;padding:10px 18px;border-radius:6px;display:none;z-index:999}
+background:#222;color:#fff;padding:10px 18px;border-radius:8px;display:none;z-index:999}
 
 #app{display:none;height:100vh;display:flex}
-#sidebar{width:280px;background:#fff;border-right:1px solid #ddd;padding:10px;overflow-y:auto}
+#sidebar{width:280px;background:#fff;border-right:1px solid #ddd;padding:12px;overflow-y:auto}
+
 #chat{flex:1;display:flex;flex-direction:column}
-#top{background:#ffb347;color:white;padding:10px;font-weight:bold}
-#typing{font-size:12px;color:#fff;opacity:.8}
-#messages{flex:1;overflow-y:auto;padding:10px;list-style:none}
-#messages li{background:#fff;padding:8px;margin-bottom:6px;border-radius:6px;font-size:14px}
-#sendBar{padding:8px;background:#eee}
-#sendBar input{width:100%;padding:8px}
-.smallBtn{font-size:11px;margin-left:4px}
-.panel{background:#fafafa;border:1px solid #ddd;padding:6px;margin-bottom:10px}
+#top{background:#ffb347;color:white;padding:12px;font-weight:600}
+
+#messages{flex:1;overflow-y:auto;padding:14px;list-style:none}
+#messages li{background:#fff;padding:10px;margin-bottom:8px;border-radius:12px;font-size:14px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
+
+#typingBar{font-size:12px;color:#666;padding:4px 14px;height:18px}
+
+#sendBar{padding:10px;background:#eee}
+#sendBar input{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc}
+
+.smallBtn{font-size:11px;margin-left:6px}
+.panel{background:#fafafa;border:1px solid #ddd;padding:8px;margin-bottom:12px;border-radius:8px}
+
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
 .online{background:#3ccf4e}
 .offline{background:#bbb}
-.time{font-size:10px;color:#888;margin-left:6px}
+
+.time{font-size:10px;color:#999;margin-left:6px}
 </style>
 </head>
 
@@ -57,7 +65,6 @@ background:#333;color:#fff;padding:10px 18px;border-radius:6px;display:none;z-in
     <button onclick="createGroup()">➕ Create Group</button>
 
     <div id="adminPanel"></div>
-    <div id="groupAdmin"></div>
 
     <h4>Users</h4>
     <div id="users"></div>
@@ -67,11 +74,9 @@ background:#333;color:#fff;padding:10px 18px;border-radius:6px;display:none;z-in
   </div>
 
   <div id="chat">
-    <div id="top">
-      <span id="title">Global</span>
-      <div id="typing"></div>
-    </div>
+    <div id="top"><span id="title">Global</span></div>
     <ul id="messages"></ul>
+    <div id="typingBar"></div>
     <div id="sendBar">
       <input id="msg" placeholder="Type message & press Enter">
     </div>
@@ -89,7 +94,7 @@ firebase.initializeApp({
 const db=firebase.database();
 const MAIN_ADMIN="banana777";
 
-let user=null, chat="global", msgRef=null, currentGroup=null;
+let user=null, chat="global", msgRef=null, typingRef=null;
 
 const hash=t=>[...t].reduce((h,c)=>((h<<5)+h)+c.charCodeAt(0),5381).toString();
 const popupBox=document.getElementById("popup");
@@ -114,8 +119,7 @@ function start(n){
   app.style.display="flex";
   db.ref("online/"+user).set(true);
   db.ref("online/"+user).onDisconnect().remove();
-  if(user===MAIN_ADMIN) loadAdminPanel();
-  openGlobal(); loadGroups(); loadUsers();
+  openGlobal(); loadUsers(); loadGroups();
 }
 
 /* EMERGENCY RESET */
@@ -125,43 +129,32 @@ async function emergencyReset(){
   location.reload();
 }
 
-/* ADMIN */
-function loadAdminPanel(){
-  db.ref("users").on("value",s=>{
-    let h='<div class="panel"><b>👑 Admin</b><br>';
-    s.forEach(c=>{
-      if(c.key===user) return;
-      const d=c.val();
-      h+=`${c.key}
-      <button class="smallBtn" onclick="db.ref('users/${c.key}/banned').set(${!d.banned})">
-      ${d.banned?'Unban':'Ban'}</button>
-      <button class="smallBtn" onclick="toggleGroupAdmin('${c.key}')">Toggle Group Admin</button><br>`;
-    });
-    adminPanel.innerHTML=h+"</div>";
-  });
-}
-function toggleGroupAdmin(u){
-  if(!currentGroup) return popup("Open a group first");
-  const r=db.ref("groups/"+currentGroup+"/admins/"+u);
-  r.once("value",s=>s.exists()?r.remove():r.set(true));
-}
-
-/* USERS */
+/* USERS + BLOCK */
 function loadUsers(){
   db.ref("users").on("value",uSnap=>{
     db.ref("online").on("value",oSnap=>{
-      users.innerHTML="";
-      uSnap.forEach(c=>{
-        if(c.key===user) return;
-        users.innerHTML+=`
-        <div>
-          <span class="dot ${oSnap.val()?.[c.key]?'online':'offline'}"></span>
-          ${c.key}
-          <button class="smallBtn" onclick="openDM('${c.key}')">DM</button>
-        </div>`;
+      db.ref("blocks/"+user).once("value",bSnap=>{
+        users.innerHTML="";
+        uSnap.forEach(c=>{
+          if(c.key===user) return;
+          const blocked=bSnap.val()?.[c.key];
+          users.innerHTML+=`
+          <div>
+            <span class="dot ${oSnap.val()?.[c.key]?'online':'offline'}"></span>
+            ${c.key}
+            <button class="smallBtn" onclick="openDM('${c.key}')">DM</button>
+            <button class="smallBtn" onclick="toggleBlock('${c.key}')">
+              ${blocked?'Unblock':'Block'}
+            </button>
+          </div>`;
+        });
       });
     });
   });
+}
+function toggleBlock(u){
+  const r=db.ref("blocks/"+user+"/"+u);
+  r.once("value",s=>s.exists()?r.remove():r.set(true));
 }
 
 /* GROUPS */
@@ -171,7 +164,6 @@ function createGroup(){
   db.ref("groups/g"+Date.now()).set({
     name,
     members:{[user]:true},
-    admins:{[user]:true},
     requests:{}
   });
 }
@@ -191,54 +183,13 @@ function loadGroups(){
 }
 function requestJoin(id){
   db.ref("groups/"+id+"/requests/"+user).set(true);
-  popup("Join request sent");
-}
-
-/* GROUP ADMIN */
-function loadGroupAdmin(){
-  db.ref("groups/"+currentGroup).on("value",s=>{
-    const g=s.val();
-    if(!g || (!g.admins?.[user] && user!==MAIN_ADMIN)){groupAdmin.innerHTML="";return;}
-    let h='<div class="panel"><b>Group Admin</b><br>';
-    for(let r in g.requests||{}){
-      h+=`${r}
-      <button class="smallBtn" onclick="approve('${r}')">Approve</button>
-      <button class="smallBtn" onclick="reject('${r}')">Reject</button><br>`;
-    }
-    for(let m in g.members){
-      if(m===user) continue;
-      h+=`${m}
-      <button class="smallBtn" onclick="kick('${m}')">Kick</button><br>`;
-    }
-    h+=`<button class="resetBtn" onclick="deleteGroup()">Delete Group</button>`;
-    groupAdmin.innerHTML=h+"</div>";
-  });
-}
-function approve(u){
-  db.ref("groups/"+currentGroup+"/members/"+u).set(true);
-  db.ref("groups/"+currentGroup+"/requests/"+u).remove();
-}
-function reject(u){db.ref("groups/"+currentGroup+"/requests/"+u).remove();}
-function kick(u){db.ref("groups/"+currentGroup+"/members/"+u).remove();}
-function deleteGroup(){
-  if(confirm("Delete group forever?")) db.ref("groups/"+currentGroup).remove();
+  popup("Request sent");
 }
 
 /* CHAT */
-function openGlobal(){chat="global";currentGroup=null;title.textContent="Global";loadMessages();}
-function openGroup(id,name){
-  chat="groups/"+id;
-  currentGroup=id;
-  title.textContent=name;
-  loadMessages();
-  loadGroupAdmin();
-}
-function openDM(o){
-  chat="dm/"+[user,o].sort().join("_");
-  currentGroup=null;
-  title.textContent="DM "+o;
-  loadMessages();
-}
+function openGlobal(){chat="global";title.textContent="Global";loadMessages();}
+function openGroup(id,name){chat="groups/"+id;title.textContent=name;loadMessages();}
+function openDM(o){chat="dm/"+[user,o].sort().join("_");title.textContent="DM "+o;loadMessages();}
 
 /* MESSAGES */
 function loadMessages(){
@@ -247,30 +198,38 @@ function loadMessages(){
   msgRef=db.ref("messages/"+chat).limitToLast(100);
   msgRef.on("child_added",s=>{
     const d=s.val();
-    const canDel=d.user===user||user===MAIN_ADMIN;
-    messages.innerHTML+=`
+    if(d.blockedBy?.[user]) return;
+    messages.insertAdjacentHTML("beforeend",`
     <li>
       <b>${d.user}</b>: ${d.text}
       <span class="time">${new Date(d.time).toLocaleTimeString()}</span>
-      ${canDel?`<button class="smallBtn" onclick="db.ref('messages/${chat}/${s.key}').remove()">🗑</button>`:""}
-    </li>`;
+      ${(d.user===user||user===MAIN_ADMIN)?`<button class="smallBtn" onclick="db.ref('messages/${chat}/${s.key}').remove()">🗑</button>`:""}
+    </li>`);
     messages.scrollTop=messages.scrollHeight;
   });
 }
 
-/* SEND + TYPING */
-msg.oninput=()=>db.ref("typing/"+chat+"/"+user).set(true);
+/* TYPING */
+msg.oninput=()=>{
+  db.ref("typing/"+chat+"/"+user).set(true);
+  clearTimeout(window.tmo);
+  window.tmo=setTimeout(()=>db.ref("typing/"+chat+"/"+user).remove(),1200);
+};
+db.ref("typing").on("value",s=>{
+  const t=Object.keys(s.val()?.[chat]||{}).filter(x=>x!==user);
+  typingBar.textContent=t.length?`${t.join(", ")} typing…`:"";
+});
+
+/* SEND */
 msg.onkeydown=e=>{
   if(e.key==="Enter" && msg.value.trim()){
-    db.ref("messages/"+chat).push({user,text:msg.value,time:Date.now()});
+    db.ref("messages/"+chat).push({
+      user,text:msg.value,time:Date.now()
+    });
     db.ref("typing/"+chat+"/"+user).remove();
     msg.value="";
   }
 };
-db.ref("typing").on("value",s=>{
-  const t=Object.keys(s.val()?.[chat]||{}).filter(x=>x!==user);
-  typing.textContent=t.length?`${t.join(", ")} typing...`:"";
-});
 </script>
 </body>
 </html>

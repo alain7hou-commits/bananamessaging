@@ -62,15 +62,11 @@ background:#222;color:#fff;padding:10px 18px;border-radius:8px;display:none;z-in
 <div id="app">
   <div id="sidebar">
     <button onclick="openGlobal()">🌍 Global</button>
-    <button onclick="createGroup()">➕ Create Group</button>
 
     <div id="adminPanel"></div>
 
     <h4>Users</h4>
     <div id="users"></div>
-
-    <h4>Groups</h4>
-    <div id="groups"></div>
   </div>
 
   <div id="chat">
@@ -94,7 +90,7 @@ firebase.initializeApp({
 const db=firebase.database();
 const MAIN_ADMIN="banana777";
 
-let user=null, chat="global", msgRef=null, typingRef=null;
+let user=null, chat="global", msgRef=null;
 
 const hash=t=>[...t].reduce((h,c)=>((h<<5)+h)+c.charCodeAt(0),5381).toString();
 const popupBox=document.getElementById("popup");
@@ -102,11 +98,13 @@ const popup=t=>{popupBox.textContent=t;popupBox.style.display="block";setTimeout
 
 /* AUTH */
 async function signup(){
+  if(!u.value||!p.value) return popup("Fill fields");
   if((await db.ref("users/"+u.value).once("value")).exists()) return popup("User exists");
   await db.ref("users/"+u.value).set({password:hash(p.value),banned:false});
   start(u.value);
 }
 async function loginUser(){
+  if(!u.value||!p.value) return popup("Fill fields");
   const s=await db.ref("users/"+u.value).once("value");
   if(!s.exists()) return popup("No user");
   if(s.val().banned) return popup("You are banned");
@@ -119,7 +117,8 @@ function start(n){
   app.style.display="flex";
   db.ref("online/"+user).set(true);
   db.ref("online/"+user).onDisconnect().remove();
-  openGlobal(); loadUsers(); loadGroups();
+  if(user===MAIN_ADMIN) loadAdminPanel();
+  openGlobal(); loadUsers();
 }
 
 /* EMERGENCY RESET */
@@ -129,7 +128,7 @@ async function emergencyReset(){
   location.reload();
 }
 
-/* USERS + BLOCK */
+/* USERS + ONLINE/OFFLINE + BLOCK */
 function loadUsers(){
   db.ref("users").on("value",uSnap=>{
     db.ref("online").on("value",oSnap=>{
@@ -157,38 +156,8 @@ function toggleBlock(u){
   r.once("value",s=>s.exists()?r.remove():r.set(true));
 }
 
-/* GROUPS */
-function createGroup(){
-  const name=prompt("Group name?");
-  if(!name) return;
-  db.ref("groups/g"+Date.now()).set({
-    name,
-    members:{[user]:true},
-    requests:{}
-  });
-}
-function loadGroups(){
-  db.ref("groups").on("value",s=>{
-    groups.innerHTML="";
-    s.forEach(c=>{
-      const g=c.val();
-      groups.innerHTML+=`
-      <div>${g.name}
-        ${g.members?.[user]
-          ? `<button onclick="openGroup('${c.key}','${g.name}')">Open</button>`
-          : `<button onclick="requestJoin('${c.key}')">Request</button>`}
-      </div>`;
-    });
-  });
-}
-function requestJoin(id){
-  db.ref("groups/"+id+"/requests/"+user).set(true);
-  popup("Request sent");
-}
-
 /* CHAT */
 function openGlobal(){chat="global";title.textContent="Global";loadMessages();}
-function openGroup(id,name){chat="groups/"+id;title.textContent=name;loadMessages();}
 function openDM(o){chat="dm/"+[user,o].sort().join("_");title.textContent="DM "+o;loadMessages();}
 
 /* MESSAGES */
@@ -198,6 +167,7 @@ function loadMessages(){
   msgRef=db.ref("messages/"+chat).limitToLast(100);
   msgRef.on("child_added",s=>{
     const d=s.val();
+    // Ignore messages from users who blocked this user
     if(d.blockedBy?.[user]) return;
     messages.insertAdjacentHTML("beforeend",`
     <li>
@@ -209,7 +179,7 @@ function loadMessages(){
   });
 }
 
-/* TYPING */
+/* TYPING INDICATOR */
 msg.oninput=()=>{
   db.ref("typing/"+chat+"/"+user).set(true);
   clearTimeout(window.tmo);
@@ -220,16 +190,28 @@ db.ref("typing").on("value",s=>{
   typingBar.textContent=t.length?`${t.join(", ")} typing…`:"";
 });
 
-/* SEND */
+/* SEND MESSAGE */
 msg.onkeydown=e=>{
   if(e.key==="Enter" && msg.value.trim()){
-    db.ref("messages/"+chat).push({
-      user,text:msg.value,time:Date.now()
-    });
+    db.ref("messages/"+chat).push({user,text:msg.value,time:Date.now()});
     db.ref("typing/"+chat+"/"+user).remove();
     msg.value="";
   }
 };
+
+/* ADMIN PANEL */
+function loadAdminPanel(){
+  db.ref("users").on("value",s=>{
+    let html='<div class="panel"><b>👑 Admin</b><br>';
+    s.forEach(c=>{
+      if(c.key===user) return;
+      html+=`${c.key} <button class="smallBtn" onclick="db.ref('users/${c.key}/banned').set(${!c.val().banned})">
+      ${c.val().banned?'Unban':'Ban'}</button><br>`;
+    });
+    adminPanel.innerHTML=html+"</div>";
+  });
+}
 </script>
 </body>
 </html>
+

@@ -69,7 +69,6 @@
         #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; }
         .reset-link { background: transparent; color: var(--danger); font-size: 10px; margin-top: 20px; border: 1px solid var(--danger); width: 100%; }
         
-        /* ADMIN PANEL */
         #adminTools { background: #1a1a1a; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #444; }
     </style>
 </head>
@@ -129,6 +128,13 @@
     const ADMIN_USER = "banana777";
     let currentUser = null;
     let currentPath = "global";
+    
+    // SPAM FILTER CONFIG
+    let lastSentTime = 0;
+    const COOLDOWN_MS = 2000; // 2 seconds
+
+    // BAD WORD LIST (Add more here!)
+    const BAD_WORDS = ["badword1", "badword2", "idiot", "stupid", "heck"];
 
     // --- AUTH ---
     async function auth(type) {
@@ -145,7 +151,7 @@
             start(u);
         } else {
             if(!snap.exists() || snap.val().password !== p) return alert("Wrong info!");
-            if(snap.val().banned) return alert("BANNED 🍌");
+            if(snap.val().banned) return alert("YOU ARE BANNED 🚫");
             start(u);
         }
     }
@@ -227,6 +233,15 @@
     }
 
     // --- MESSAGING ---
+    function cleanText(text) {
+        let clean = text;
+        BAD_WORDS.forEach(word => {
+            const regex = new RegExp(word, "gi");
+            clean = clean.replace(regex, "****");
+        });
+        return clean;
+    }
+
     function loadMessages() {
         const list = document.getElementById('messages');
         db.ref("messages/" + currentPath).off(); 
@@ -258,12 +273,26 @@
 
     function send() {
         const input = document.getElementById('msgInput');
-        if(!input.value.trim()) return;
+        const text = input.value.trim();
+        if(!text) return;
+
+        // SPAM FILTER
+        const now = Date.now();
+        if(now - lastSentTime < COOLDOWN_MS) {
+            alert("Slow down! 🍌 Chill for a second.");
+            return;
+        }
+
+        // BAD WORD FILTER
+        const filteredText = cleanText(text);
+
         db.ref("messages/" + currentPath).push({
             user: currentUser,
-            text: input.value.trim(),
-            time: Date.now()
+            text: filteredText,
+            time: now
         });
+        
+        lastSentTime = now;
         input.value = "";
     }
 

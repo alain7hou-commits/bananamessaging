@@ -67,6 +67,10 @@
         .del-btn:hover { opacity: 1; }
 
         #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; }
+        .reset-link { background: transparent; color: var(--danger); font-size: 10px; margin-top: 20px; border: 1px solid var(--danger); width: 100%; }
+        
+        /* ADMIN PANEL */
+        #adminTools { background: #1a1a1a; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #444; }
     </style>
 </head>
 <body>
@@ -77,6 +81,7 @@
     <input id="p" type="password" placeholder="Password">
     <button onclick="auth('login')">Login</button>
     <button style="background:#444; color:white" onclick="auth('signup')">Sign Up</button>
+    <button class="reset-link" onclick="emergencyReset()">🚨 Emergency Wipe</button>
 </div>
 
 <div id="app">
@@ -87,6 +92,13 @@
         
         <div class="list-title">Direct Messages</div>
         <div id="userList" style="flex:1; overflow-y:auto;"></div>
+
+        <div id="adminPanel" class="hidden">
+            <div class="list-title">Admin Tools</div>
+            <div id="adminTools">
+                <button onclick="updateResetPin()" style="font-size:10px; padding:5px; background:#444; color:white">Change Reset PIN</button>
+            </div>
+        </div>
         
         <button onclick="location.reload()" style="background:var(--danger); margin-top:10px">Logout</button>
     </div>
@@ -122,7 +134,7 @@
     async function auth(type) {
         const u = document.getElementById('u').value.trim().toLowerCase();
         const p = document.getElementById('p').value.trim();
-        if(!u || !p) return alert("Missing details!");
+        if(!u || !p) return alert("Fill everything in!");
 
         const ref = db.ref("users/" + u);
         const snap = await ref.once("value");
@@ -132,8 +144,8 @@
             await ref.set({ password: p, banned: false });
             start(u);
         } else {
-            if(!snap.exists() || snap.val().password !== p) return alert("Wrong login!");
-            if(snap.val().banned) return alert("YOU ARE BANNED 🍌");
+            if(!snap.exists() || snap.val().password !== p) return alert("Wrong info!");
+            if(snap.val().banned) return alert("BANNED 🍌");
             start(u);
         }
     }
@@ -144,10 +156,13 @@
         document.getElementById('app').style.display = 'flex';
         document.getElementById('myUserDisplay').innerText = (currentUser === ADMIN_USER ? "👑 " : "👤 ") + currentUser;
         
-        // Live Ban Listener (Boot user if admin bans them)
+        if(currentUser === ADMIN_USER) {
+            document.getElementById('adminPanel').classList.remove('hidden');
+        }
+
         db.ref("users/" + currentUser + "/banned").on("value", snap => {
             if(snap.val() === true) {
-                alert("You have been banned by the Admin!");
+                alert("You've been banned!");
                 location.reload();
             }
         });
@@ -156,7 +171,7 @@
         openGlobal(); 
     }
 
-    // --- SIDEBAR & MODERATION ---
+    // --- SIDEBAR & NAVIGATION ---
     function loadUsers() {
         db.ref("users").on("value", snap => {
             const list = document.getElementById('userList');
@@ -177,7 +192,7 @@
                 }
 
                 div.innerHTML = `
-                    <span onclick="openDM('${child.key}')">👤 ${child.key} ${userData.banned ? '(BANNED)' : ''}</span>
+                    <span style="flex:1" onclick="openDM('${child.key}')">👤 ${child.key} ${userData.banned ? '🚫' : ''}</span>
                     <div>${modControls}</div>
                 `;
                 list.appendChild(div);
@@ -201,7 +216,7 @@
     function openDM(targetUser) {
         const roomID = [currentUser, targetUser].sort().join("_");
         currentPath = "dm/" + roomID;
-        document.getElementById('chatTitle').innerText = "💬 Chat with " + targetUser;
+        document.getElementById('chatTitle').innerText = "💬 " + targetUser;
         uiHighlight("user-" + targetUser);
         loadMessages();
     }
@@ -226,8 +241,6 @@
                 
                 const li = document.createElement('li');
                 li.className = `msg ${isMe ? 'me' : ''}`;
-                
-                // Admin can delete anything, users delete only theirs
                 const delBtn = (isMe || isAdmin) ? `<button class="del-btn" onclick="deleteMsg('${child.key}')">✕</button>` : '';
 
                 li.innerHTML = `
@@ -245,26 +258,45 @@
 
     function send() {
         const input = document.getElementById('msgInput');
-        const val = input.value.trim();
-        if(!val) return;
-
+        if(!input.value.trim()) return;
         db.ref("messages/" + currentPath).push({
             user: currentUser,
-            text: val,
+            text: input.value.trim(),
             time: Date.now()
         });
         input.value = "";
     }
 
     function deleteMsg(msgID) {
-        if(confirm("Delete message?")) {
-            db.ref("messages/" + currentPath + "/" + msgID).remove();
+        if(confirm("Delete message?")) db.ref("messages/" + currentPath + "/" + msgID).remove();
+    }
+
+    // --- ADMIN CONTROLS ---
+    async function updateResetPin() {
+        const newPin = prompt("Set new Master Reset PIN:");
+        if(newPin) {
+            await db.ref("settings/adminPin").set(newPin);
+            alert("Reset PIN updated!");
         }
     }
 
-    document.getElementById('msgInput').addEventListener("keypress", (e) => {
-        if(e.key === "Enter") send();
-    });
+    async function emergencyReset() {
+        const inputPin = prompt("Enter Master PIN to WIPE ALL DATA:");
+        const pinSnap = await db.ref("settings/adminPin").once("value");
+        const actualPin = pinSnap.exists() ? pinSnap.val() : "0000";
+
+        if(inputPin === actualPin) {
+            if(confirm("FINAL WARNING: Wipe everything?")) {
+                await db.ref().remove();
+                alert("System Reset Complete.");
+                location.reload();
+            }
+        } else {
+            alert("Incorrect PIN.");
+        }
+    }
+
+    document.getElementById('msgInput').addEventListener("keypress", (e) => { if(e.key === "Enter") send(); });
 </script>
 
 </body>

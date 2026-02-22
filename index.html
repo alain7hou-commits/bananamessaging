@@ -12,6 +12,7 @@
             --text: #ffffff;
             --msg-bg: #333;
             --danger: #ff5555;
+            --admin-color: #00d4ff;
         }
 
         body {
@@ -31,17 +32,22 @@
         /* APP LAYOUT */
         #app { display: none; width: 100vw; height: 100vh; flex-direction: row; }
         
-        #sidebar { width: 260px; background: var(--sidebar-bg); border-right: 1px solid #333; padding: 20px; display: flex; flex-direction: column; }
-        .sidebar-btn { background: #333; color: white; margin-bottom: 10px; text-align: left; padding: 12px; }
+        #sidebar { width: 280px; background: var(--sidebar-bg); border-right: 1px solid #333; padding: 20px; display: flex; flex-direction: column; }
+        .sidebar-btn { background: #333; color: white; margin-bottom: 10px; text-align: left; padding: 12px; width: 100%; border:none; border-radius:8px; cursor:pointer;}
         .sidebar-btn:hover { background: #444; }
 
-        .list-title { font-size: 12px; color: var(--primary); letter-spacing: 1px; margin: 20px 0 10px 5px; text-transform: uppercase; }
+        .list-title { font-size: 11px; color: var(--primary); letter-spacing: 1px; margin: 20px 0 10px 5px; text-transform: uppercase; }
         .user-item { 
             padding: 10px; margin-bottom: 5px; background: #2a2a2a; border-radius: 8px; cursor: pointer; 
             display: flex; justify-content: space-between; align-items: center; transition: 0.2s; font-size: 14px;
         }
-        .user-item:hover { background: var(--primary); color: black; }
-        .active-chat { border-left: 4px solid var(--primary); background: #333; }
+        .user-item:hover { background: #333; }
+        .active-chat { border-left: 4px solid var(--primary); background: #333 !important; }
+
+        /* MODERATION */
+        .mod-btn { font-size: 10px; padding: 4px 8px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; margin-left: 5px; }
+        .ban-btn { background: var(--danger); color: white; }
+        .unban-btn { background: #44bb44; color: white; }
 
         /* CHAT AREA */
         #chat { flex: 1; display: flex; flex-direction: column; background: #111; }
@@ -61,7 +67,6 @@
         .del-btn:hover { opacity: 1; }
 
         #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; }
-        .reset-link { background: transparent; color: var(--danger); font-size: 10px; margin-top: 20px; border: 1px solid var(--danger); }
     </style>
 </head>
 <body>
@@ -72,12 +77,11 @@
     <input id="p" type="password" placeholder="Password">
     <button onclick="auth('login')">Login</button>
     <button style="background:#444; color:white" onclick="auth('signup')">Sign Up</button>
-    <button class="reset-link" onclick="emergencyReset()">🚨 Emergency Wipe</button>
 </div>
 
 <div id="app">
     <div id="sidebar">
-        <h3 style="color:var(--primary); margin-top:0">🍌 Banana</h3>
+        <h3 id="myUserDisplay" style="color:var(--primary); margin-top:0">🍌 Banana</h3>
         
         <button class="sidebar-btn" onclick="openGlobal()">🌍 Global Chat</button>
         
@@ -90,7 +94,6 @@
     <div id="chat">
         <div id="top">
             <span id="chatTitle">Global Chat</span>
-            <span id="typingStatus" style="font-size:10px; color:gray; font-weight:normal"></span>
         </div>
         <ul id="messages"></ul>
         <div id="sendBar">
@@ -111,6 +114,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    const ADMIN_USER = "banana777";
     let currentUser = null;
     let currentPath = "global";
 
@@ -118,17 +122,18 @@
     async function auth(type) {
         const u = document.getElementById('u').value.trim().toLowerCase();
         const p = document.getElementById('p').value.trim();
-        if(!u || !p) return alert("Fill in the blanks!");
+        if(!u || !p) return alert("Missing details!");
 
         const ref = db.ref("users/" + u);
         const snap = await ref.once("value");
 
         if(type === 'signup') {
-            if(snap.exists()) return alert("User already exists");
-            await ref.set({ password: p });
+            if(snap.exists()) return alert("Username taken!");
+            await ref.set({ password: p, banned: false });
             start(u);
         } else {
-            if(!snap.exists() || snap.val().password !== p) return alert("Invalid login");
+            if(!snap.exists() || snap.val().password !== p) return alert("Wrong login!");
+            if(snap.val().banned) return alert("YOU ARE BANNED 🍌");
             start(u);
         }
     }
@@ -137,25 +142,53 @@
         currentUser = user;
         document.getElementById('loginPage').classList.add('hidden');
         document.getElementById('app').style.display = 'flex';
+        document.getElementById('myUserDisplay').innerText = (currentUser === ADMIN_USER ? "👑 " : "👤 ") + currentUser;
+        
+        // Live Ban Listener (Boot user if admin bans them)
+        db.ref("users/" + currentUser + "/banned").on("value", snap => {
+            if(snap.val() === true) {
+                alert("You have been banned by the Admin!");
+                location.reload();
+            }
+        });
+
         loadUsers();
         openGlobal(); 
     }
 
-    // --- SIDEBAR & NAVIGATION ---
+    // --- SIDEBAR & MODERATION ---
     function loadUsers() {
         db.ref("users").on("value", snap => {
             const list = document.getElementById('userList');
             list.innerHTML = "";
             snap.forEach(child => {
                 if(child.key === currentUser) return;
+                
+                const userData = child.val();
                 const div = document.createElement('div');
                 div.className = 'user-item';
                 div.id = "user-" + child.key;
-                div.innerHTML = `<span>👤 ${child.key}</span>`;
-                div.onclick = () => openDM(child.key);
+                
+                let modControls = "";
+                if(currentUser === ADMIN_USER) {
+                    modControls = userData.banned ? 
+                        `<button class="mod-btn unban-btn" onclick="toggleBan('${child.key}', false); event.stopPropagation();">Unban</button>` :
+                        `<button class="mod-btn ban-btn" onclick="toggleBan('${child.key}', true); event.stopPropagation();">Ban</button>`;
+                }
+
+                div.innerHTML = `
+                    <span onclick="openDM('${child.key}')">👤 ${child.key} ${userData.banned ? '(BANNED)' : ''}</span>
+                    <div>${modControls}</div>
+                `;
                 list.appendChild(div);
             });
         });
+    }
+
+    function toggleBan(targetUser, status) {
+        if(confirm(`${status ? 'Ban' : 'Unban'} ${targetUser}?`)) {
+            db.ref("users/" + targetUser + "/banned").set(status);
+        }
     }
 
     function openGlobal() {
@@ -175,7 +208,7 @@
 
     function uiHighlight(id) {
         document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active-chat'));
-        if(id) document.getElementById(id).classList.add('active-chat');
+        if(id && document.getElementById(id)) document.getElementById(id).classList.add('active-chat');
     }
 
     // --- MESSAGING ---
@@ -188,15 +221,18 @@
             snap.forEach(child => {
                 const m = child.val();
                 const isMe = m.user === currentUser;
+                const isAdmin = currentUser === ADMIN_USER;
                 const time = m.time ? new Date(m.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
                 
                 const li = document.createElement('li');
                 li.className = `msg ${isMe ? 'me' : ''}`;
-                const delBtn = isMe ? `<button class="del-btn" onclick="deleteMsg('${child.key}')">✕</button>` : '';
+                
+                // Admin can delete anything, users delete only theirs
+                const delBtn = (isMe || isAdmin) ? `<button class="del-btn" onclick="deleteMsg('${child.key}')">✕</button>` : '';
 
                 li.innerHTML = `
                     <div class="msg-text">
-                        <span class="msg-info">${m.user} <span class="timestamp">${time}</span></span>
+                        <span class="msg-info">${m.user === ADMIN_USER ? '👑 ' : ''}${m.user} <span class="timestamp">${time}</span></span>
                         ${m.text}
                     </div>
                     ${delBtn}
@@ -221,26 +257,11 @@
     }
 
     function deleteMsg(msgID) {
-        if(confirm("Delete message for everyone?")) {
+        if(confirm("Delete message?")) {
             db.ref("messages/" + currentPath + "/" + msgID).remove();
         }
     }
 
-    // --- EMERGENCY ---
-    async function emergencyReset() {
-        const pin = prompt("Enter Master PIN (Default 0000):");
-        if(pin === "0000") {
-            if(confirm("WIPE ENTIRE DATABASE? This cannot be undone.")) {
-                await db.ref().remove();
-                alert("Database wiped.");
-                location.reload();
-            }
-        } else {
-            alert("Wrong PIN.");
-        }
-    }
-
-    // Enter Key Support
     document.getElementById('msgInput').addEventListener("keypress", (e) => {
         if(e.key === "Enter") send();
     });

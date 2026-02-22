@@ -13,6 +13,7 @@
             --msg-bg: #333;
             --danger: #ff5555;
             --admin-color: #00d4ff;
+            --notif: #ffb347;
         }
 
         body {
@@ -25,91 +26,89 @@
         #loginPage { text-align: center; background: var(--sidebar-bg); padding: 40px; border-radius: 20px; width: 320px; z-index: 10; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .hidden { display: none !important; }
 
-        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; margin-top: 10px; background: var(--primary); border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        input { width: 100%; padding: 15px; margin: 10px 0; border-radius: 10px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; font-size: 16px; }
+        
+        button { 
+            width: 100%; padding: 15px; margin-top: 10px; background: var(--primary); 
+            border: none; border-radius: 10px; font-weight: bold; cursor: pointer; 
+            transition: 0.2s; font-size: 16px; display: flex; align-items: center; justify-content: center;
+        }
+        button:active { transform: scale(0.98); }
         button:hover { opacity: 0.9; }
 
         /* APP LAYOUT */
         #app { display: none; width: 100vw; height: 100vh; flex-direction: row; }
         
-        #sidebar { width: 280px; background: var(--sidebar-bg); border-right: 1px solid #333; padding: 20px; display: flex; flex-direction: column; }
-        .sidebar-btn { background: #333; color: white; margin-bottom: 10px; text-align: left; padding: 12px; width: 100%; border:none; border-radius:8px; cursor:pointer;}
-        .sidebar-btn:hover { background: #444; }
-
-        .list-title { font-size: 11px; color: var(--primary); letter-spacing: 1px; margin: 20px 0 10px 5px; text-transform: uppercase; }
+        #sidebar { width: 300px; background: var(--sidebar-bg); border-right: 1px solid #333; padding: 20px; display: flex; flex-direction: column; }
+        .sidebar-btn { background: #333; color: white; margin-bottom: 12px; text-align: left; padding: 15px; width: 100%; border:none; border-radius:10px; cursor:pointer;}
+        
+        .list-title { font-size: 12px; color: var(--primary); letter-spacing: 1px; margin: 25px 0 10px 5px; text-transform: uppercase; font-weight: bold; }
+        
         .user-item { 
-            padding: 10px; margin-bottom: 5px; background: #2a2a2a; border-radius: 8px; cursor: pointer; 
-            display: flex; justify-content: space-between; align-items: center; transition: 0.2s; font-size: 14px;
+            padding: 15px; margin-bottom: 8px; background: #2a2a2a; border-radius: 10px; cursor: pointer; 
+            display: flex; justify-content: space-between; align-items: center; transition: 0.2s; font-size: 15px;
         }
         .user-item:hover { background: #333; }
-        .active-chat { border-left: 4px solid var(--primary); background: #333 !important; }
+        .active-chat { border-left: 5px solid var(--primary); background: #333 !important; }
 
-        /* MODERATION */
-        .mod-btn { font-size: 10px; padding: 4px 8px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; margin-left: 5px; }
+        /* NOTIFICATION DOT */
+        .notif-dot { color: var(--notif); margin-left: 8px; font-size: 18px; }
+
+        .mod-group { display: flex; gap: 5px; }
+        .mod-btn { font-size: 11px; padding: 8px 10px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; }
         .ban-btn { background: var(--danger); color: white; }
-        .unban-btn { background: #44bb44; color: white; }
+        .block-btn { background: #555; color: white; }
 
         /* CHAT AREA */
         #chat { flex: 1; display: flex; flex-direction: column; background: #111; }
-        #top { padding: 15px 25px; background: #222; border-bottom: 1px solid #333; font-weight: bold; color: var(--primary); display: flex; justify-content: space-between; align-items: center;}
+        #top { padding: 20px 25px; background: #222; border-bottom: 1px solid #333; font-weight: bold; color: var(--primary); font-size: 18px; }
         
-        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; }
+        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; list-style: none; margin: 0; }
         
-        .msg { max-width: 75%; padding: 10px 15px; border-radius: 12px; background: var(--msg-bg); position: relative; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; animation: fadeIn 0.2s ease-in;}
+        .msg { max-width: 75%; padding: 12px 18px; border-radius: 15px; background: var(--msg-bg); position: relative; animation: fadeIn 0.2s ease-in; line-height: 1.4; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         .msg.me { align-self: flex-end; background: var(--primary); color: #000; }
-        .msg-text { word-break: break-word; flex: 1; }
-        .msg-info { display: block; font-size: 10px; opacity: 0.6; margin-bottom: 4px; font-weight: bold; }
-        .timestamp { font-size: 9px; margin-left: 8px; font-weight: normal; opacity: 0.7; }
+        .msg-info { display: block; font-size: 11px; opacity: 0.7; margin-bottom: 5px; font-weight: bold; }
+        .timestamp { font-size: 10px; margin-left: 8px; font-weight: normal; }
 
-        .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 0; width: auto; margin: 0; opacity: 0.4; }
+        .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 18px; padding: 0 5px; opacity: 0.4; }
         .del-btn:hover { opacity: 1; }
 
-        #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; }
-        .reset-link { background: transparent; color: var(--danger); font-size: 10px; margin-top: 20px; border: 1px solid var(--danger); width: 100%; }
-        
-        #adminTools { background: #1a1a1a; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #444; }
+        #sendBar { padding: 20px; display: flex; gap: 12px; background: #222; border-top: 1px solid #333; }
+        .reset-link { background: transparent; color: var(--danger); font-size: 11px; margin-top: 25px; border: 1px solid var(--danger); }
     </style>
 </head>
 <body>
 
 <div id="loginPage">
-    <h2 style="color:var(--primary)">🍌 Banana Messaging</h2>
+    <h2 style="color:var(--primary); font-size: 28px;">🍌 Banana</h2>
     <input id="u" placeholder="Username">
     <input id="p" type="password" placeholder="Password">
     <button onclick="auth('login')">Login</button>
     <button style="background:#444; color:white" onclick="auth('signup')">Sign Up</button>
-    <button class="reset-link" onclick="emergencyReset()">🚨 Emergency Wipe</button>
+    <button class="reset-link" onclick="emergencyReset()">🚨 EMERGENCY RESET</button>
 </div>
 
 <div id="app">
     <div id="sidebar">
-        <h3 id="myUserDisplay" style="color:var(--primary); margin-top:0">🍌 Banana</h3>
-        
+        <h3 id="myUserDisplay" style="color:var(--primary); margin:0 0 20px 0; font-size: 22px;">🍌 Banana</h3>
         <button class="sidebar-btn" onclick="openGlobal()">🌍 Global Chat</button>
-        
         <div class="list-title">Direct Messages</div>
         <div id="userList" style="flex:1; overflow-y:auto;"></div>
-
         <div id="adminPanel" class="hidden">
-            <div class="list-title">Admin Tools</div>
-            <div id="adminTools">
-                <button onclick="updateResetPin()" style="font-size:10px; padding:5px; background:#444; color:white">Change Reset PIN</button>
-            </div>
+            <div class="list-title">Admin Settings</div>
+            <button onclick="updateResetPin()" style="background:#444; font-size: 12px;">Update Master PIN</button>
         </div>
-        
-        <button onclick="location.reload()" style="background:var(--danger); margin-top:10px">Logout</button>
+        <button onclick="location.reload()" style="background:var(--danger); margin-top:15px">Logout</button>
     </div>
 
     <div id="chat">
-        <div id="top">
-            <span id="chatTitle">Global Chat</span>
-        </div>
+        <div id="top"><span id="chatTitle">Global Chat</span></div>
         <ul id="messages"></ul>
         <div id="sendBar">
-            <input id="msgInput" placeholder="Type a message...">
-            <button onclick="send()" style="width:80px; margin:0">Send</button>
+            <input id="msgInput" placeholder="Write something..." autocomplete="off">
+            <button onclick="send()" style="width:100px; margin:0">Send</button>
         </div>
     </div>
 </div>
@@ -128,30 +127,29 @@
     const ADMIN_USER = "banana777";
     let currentUser = null;
     let currentPath = "global";
+    let myBlocks = [];
+    let unreadDMs = {};
     
-    // SPAM FILTER CONFIG
     let lastSentTime = 0;
-    const COOLDOWN_MS = 2000; // 2 seconds
+    const COOLDOWN_MS = 1000;
+    const BAD_WORDS = ["badword1", "badword2", "stupid", "idiot", "heck"];
 
-    // BAD WORD LIST (Add more here!)
-    const BAD_WORDS = ["badword1", "badword2", "idiot", "stupid", "heck"];
-
-    // --- AUTH ---
     async function auth(type) {
         const u = document.getElementById('u').value.trim().toLowerCase();
         const p = document.getElementById('p').value.trim();
-        if(!u || !p) return alert("Fill everything in!");
+        if(!u || !p) return alert("Fill in all fields!");
 
         const ref = db.ref("users/" + u);
         const snap = await ref.once("value");
 
         if(type === 'signup') {
-            if(snap.exists()) return alert("Username taken!");
+            if(snap.exists()) return alert("User already exists!");
             await ref.set({ password: p, banned: false });
             start(u);
         } else {
-            if(!snap.exists() || snap.val().password !== p) return alert("Wrong info!");
-            if(snap.val().banned) return alert("YOU ARE BANNED 🚫");
+            if(!snap.exists()) return alert("User not found!");
+            if(snap.val().password !== p) return alert("Incorrect password!");
+            if(snap.val().banned) return alert("You are BANNED 🚫");
             start(u);
         }
     }
@@ -162,108 +160,114 @@
         document.getElementById('app').style.display = 'flex';
         document.getElementById('myUserDisplay').innerText = (currentUser === ADMIN_USER ? "👑 " : "👤 ") + currentUser;
         
-        if(currentUser === ADMIN_USER) {
-            document.getElementById('adminPanel').classList.remove('hidden');
-        }
+        if(currentUser === ADMIN_USER) document.getElementById('adminPanel').classList.remove('hidden');
 
-        db.ref("users/" + currentUser + "/banned").on("value", snap => {
-            if(snap.val() === true) {
-                alert("You've been banned!");
-                location.reload();
-            }
+        db.ref("blocks/" + currentUser).on("value", snap => {
+            myBlocks = snap.val() ? Object.keys(snap.val()) : [];
+            loadUsers();
+        });
+
+        // NOTIFICATION LOGIC: Listen for all messages sent to you
+        db.ref("messages/dm").on("value", snap => {
+            unreadDMs = {};
+            snap.forEach(room => {
+                const parts = room.key.split("_");
+                if(parts.includes(currentUser)) {
+                    const otherUser = parts.find(p => p !== currentUser);
+                    const lastMsg = Object.values(room.val()).pop();
+                    if(lastMsg.user !== currentUser && currentPath !== "dm/"+room.key) {
+                        unreadDMs[otherUser] = true;
+                    }
+                }
+            });
+            loadUsers();
         });
 
         loadUsers();
         openGlobal(); 
     }
 
-    // --- SIDEBAR & NAVIGATION ---
     function loadUsers() {
         db.ref("users").on("value", snap => {
             const list = document.getElementById('userList');
             list.innerHTML = "";
             snap.forEach(child => {
                 if(child.key === currentUser) return;
+                const isBlocked = myBlocks.includes(child.key);
+                const hasUnread = unreadDMs[child.key];
                 
-                const userData = child.val();
                 const div = document.createElement('div');
-                div.className = 'user-item';
-                div.id = "user-" + child.key;
+                div.className = `user-item ${currentPath.includes(child.key) ? 'active-chat' : ''}`;
                 
-                let modControls = "";
+                let controls = `<div class="mod-group">`;
+                controls += `<button class="mod-btn block-btn" onclick="toggleBlock('${child.key}'); event.stopPropagation();">${isBlocked ? 'Unblock' : 'Block'}</button>`;
+                
                 if(currentUser === ADMIN_USER) {
-                    modControls = userData.banned ? 
-                        `<button class="mod-btn unban-btn" onclick="toggleBan('${child.key}', false); event.stopPropagation();">Unban</button>` :
+                    controls += child.val().banned ? 
+                        `<button class="mod-btn" style="background:#44bb44; color:white" onclick="toggleBan('${child.key}', false); event.stopPropagation();">Unban</button>` :
                         `<button class="mod-btn ban-btn" onclick="toggleBan('${child.key}', true); event.stopPropagation();">Ban</button>`;
                 }
+                controls += `</div>`;
 
                 div.innerHTML = `
-                    <span style="flex:1" onclick="openDM('${child.key}')">👤 ${child.key} ${userData.banned ? '🚫' : ''}</span>
-                    <div>${modControls}</div>
+                    <span style="flex:1" onclick="openDM('${child.key}')">
+                        👤 ${child.key} ${isBlocked ? '🚫' : ''}
+                        ${hasUnread ? '<span class="notif-dot">●</span>' : ''}
+                    </span>
+                    ${controls}
                 `;
                 list.appendChild(div);
             });
         });
     }
 
-    function toggleBan(targetUser, status) {
-        if(confirm(`${status ? 'Ban' : 'Unban'} ${targetUser}?`)) {
-            db.ref("users/" + targetUser + "/banned").set(status);
-        }
+    function toggleBlock(target) {
+        const ref = db.ref(`blocks/${currentUser}/${target}`);
+        if(myBlocks.includes(target)) ref.remove();
+        else ref.set(true);
+    }
+
+    function toggleBan(target, status) {
+        if(confirm(`Admin: ${status ? 'Ban' : 'Unban'} ${target}?`)) db.ref("users/" + target + "/banned").set(status);
     }
 
     function openGlobal() {
         currentPath = "global";
         document.getElementById('chatTitle').innerText = "🌍 Global Chat";
-        uiHighlight(null);
         loadMessages();
     }
 
     function openDM(targetUser) {
+        if(myBlocks.includes(targetUser)) return alert("Unblock them to chat!");
         const roomID = [currentUser, targetUser].sort().join("_");
         currentPath = "dm/" + roomID;
         document.getElementById('chatTitle').innerText = "💬 " + targetUser;
-        uiHighlight("user-" + targetUser);
+        delete unreadDMs[targetUser];
+        loadUsers();
         loadMessages();
-    }
-
-    function uiHighlight(id) {
-        document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active-chat'));
-        if(id && document.getElementById(id)) document.getElementById(id).classList.add('active-chat');
-    }
-
-    // --- MESSAGING ---
-    function cleanText(text) {
-        let clean = text;
-        BAD_WORDS.forEach(word => {
-            const regex = new RegExp(word, "gi");
-            clean = clean.replace(regex, "****");
-        });
-        return clean;
     }
 
     function loadMessages() {
         const list = document.getElementById('messages');
         db.ref("messages/" + currentPath).off(); 
-        
         db.ref("messages/" + currentPath).on("value", snap => {
             list.innerHTML = "";
             snap.forEach(child => {
                 const m = child.val();
+                if(myBlocks.includes(m.user)) return;
+
                 const isMe = m.user === currentUser;
-                const isAdmin = currentUser === ADMIN_USER;
                 const time = m.time ? new Date(m.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
-                
                 const li = document.createElement('li');
                 li.className = `msg ${isMe ? 'me' : ''}`;
-                const delBtn = (isMe || isAdmin) ? `<button class="del-btn" onclick="deleteMsg('${child.key}')">✕</button>` : '';
+                const delBtn = (isMe || currentUser === ADMIN_USER) ? `<button class="del-btn" onclick="deleteMsg('${child.key}')">✕</button>` : '';
 
                 li.innerHTML = `
-                    <div class="msg-text">
-                        <span class="msg-info">${m.user === ADMIN_USER ? '👑 ' : ''}${m.user} <span class="timestamp">${time}</span></span>
-                        ${m.text}
+                    <div style="display:flex; justify-content:space-between">
+                        <span class="msg-info">${m.user} <span class="timestamp">${time}</span></span>
+                        ${delBtn}
                     </div>
-                    ${delBtn}
+                    <div>${m.text}</div>
                 `;
                 list.appendChild(li);
             });
@@ -273,60 +277,41 @@
 
     function send() {
         const input = document.getElementById('msgInput');
-        const text = input.value.trim();
+        let text = input.value.trim();
         if(!text) return;
 
-        // SPAM FILTER
-        const now = Date.now();
-        if(now - lastSentTime < COOLDOWN_MS) {
-            alert("Slow down! 🍌 Chill for a second.");
-            return;
-        }
+        if(Date.now() - lastSentTime < COOLDOWN_MS) return;
 
-        // BAD WORD FILTER
-        const filteredText = cleanText(text);
-
-        db.ref("messages/" + currentPath).push({
-            user: currentUser,
-            text: filteredText,
-            time: now
+        // FIXED Bad Word Filter
+        BAD_WORDS.forEach(w => {
+            const regex = new RegExp("\\b" + w + "\\b", "gi");
+            text = text.replace(regex, "****");
         });
-        
-        lastSentTime = now;
+
+        db.ref("messages/" + currentPath).push({ user: currentUser, text: text, time: Date.now() });
+        lastSentTime = Date.now();
         input.value = "";
     }
 
-    function deleteMsg(msgID) {
-        if(confirm("Delete message?")) db.ref("messages/" + currentPath + "/" + msgID).remove();
-    }
+    function deleteMsg(id) { if(confirm("Delete message?")) db.ref(`messages/${currentPath}/${id}`).remove(); }
 
-    // --- ADMIN CONTROLS ---
     async function updateResetPin() {
-        const newPin = prompt("Set new Master Reset PIN:");
-        if(newPin) {
-            await db.ref("settings/adminPin").set(newPin);
-            alert("Reset PIN updated!");
-        }
+        const p = prompt("Set new Master PIN:");
+        if(p) db.ref("settings/adminPin").set(p);
     }
 
     async function emergencyReset() {
-        const inputPin = prompt("Enter Master PIN to WIPE ALL DATA:");
-        const pinSnap = await db.ref("settings/adminPin").once("value");
-        const actualPin = pinSnap.exists() ? pinSnap.val() : "0000";
-
-        if(inputPin === actualPin) {
-            if(confirm("FINAL WARNING: Wipe everything?")) {
-                await db.ref().remove();
-                alert("System Reset Complete.");
-                location.reload();
-            }
+        const p = prompt("Enter Master PIN to WIPE ALL DATA:");
+        const snap = await db.ref("settings/adminPin").once("value");
+        const masterPin = snap.val() || "0000";
+        if(p === masterPin) {
+            if(confirm("FINAL WARNING: Wipe everything?")) { await db.ref().remove(); location.reload(); }
         } else {
-            alert("Incorrect PIN.");
+            alert("Wrong PIN!");
         }
     }
 
-    document.getElementById('msgInput').addEventListener("keypress", (e) => { if(e.key === "Enter") send(); });
+    document.getElementById('msgInput').addEventListener("keypress", e => { if(e.key === "Enter") send(); });
 </script>
-
 </body>
 </html>

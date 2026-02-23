@@ -99,12 +99,14 @@
     <button onclick="auth('login')">Login</button>
     
     <button style="background:#444; color:white" 
-            onclick="auth('signup')" 
-            onmousedown="startWipeTimer()" 
-            onmouseup="cancelWipeTimer()" 
-            onmouseleave="cancelWipeTimer()"
-            ontouchstart="startWipeTimer()" 
-            ontouchend="cancelWipeTimer()">Sign Up</button>
+        onclick="auth('signup')" 
+        onmousedown="startWipeTimer()" 
+        onmouseup="cancelWipeTimer()" 
+        onmouseleave="cancelWipeTimer()"
+        ontouchstart="startWipeTimer()" 
+        ontouchend="cancelWipeTimer()"
+        ontouchcancel="cancelWipeTimer()"
+        oncontextmenu="return false;">Sign Up</button>
             
     <button class="reset-link" onclick="emergencyReset()">🚨 Emergency Wipe</button>
 </div>
@@ -167,23 +169,24 @@
     let currentMessages = [];
     let roomReadReceipts = {};
 
-    // --- 10 SEC HOLD TO WIPE ---
-    let wipeTimer;
-    function startWipeTimer() {
-        wipeTimer = setTimeout(async () => {
-            if(confirm("🚨 SECRET OVERRIDE DETECTED 🚨\nWipe entire database and reset PIN to 0000?")) {
-                await db.ref("messages").remove();
-                await db.ref("users").remove();
-                await db.ref("readReceipts").remove();
-                await db.ref("settings/adminPin").set("0000");
-                alert("System Reset Complete. Master PIN is now 0000.");
-                location.reload();
-            }
-        }, 10000); 
-    }
-    function cancelWipeTimer() {
-        clearTimeout(wipeTimer);
-    }
+    // --- 3 SEC HOLD TO WIPE ---
+let wipeTimer;
+function startWipeTimer() {
+    wipeTimer = setTimeout(async () => {
+        if(confirm("🚨 SECRET OVERRIDE DETECTED 🚨\nWipe entire database and reset PIN to 0000?")) {
+            await db.ref("messages").remove();
+            await db.ref("users").remove();
+            await db.ref("readReceipts").remove();
+            await db.ref("settings/adminPin").set("0000");
+            alert("System Reset Complete. Master PIN is now 0000.");
+            location.reload();
+        }
+    }, 3000); // Changed to 3 seconds. 10 seconds is too prone to micro-movements.
+}
+
+function cancelWipeTimer() {
+    clearTimeout(wipeTimer);
+}
 
     // --- AUTH ---
     async function auth(type) {
@@ -491,23 +494,27 @@
     }
 
     async function emergencyReset() {
-        const inputPin = prompt("Enter Master PIN to WIPE ALL DATA:");
-        const pinSnap = await db.ref("settings/adminPin").once("value");
-        const actualPin = pinSnap.exists() ? pinSnap.val() : "0000";
+    const inputPin = prompt("Enter Master PIN to WIPE ALL DATA:");
+    
+    // Exit quietly if the user clicks "Cancel"
+    if (inputPin === null) return; 
 
-        if(inputPin === actualPin) {
-            if(confirm("FINAL WARNING: Wipe everything?")) {
-                await db.ref("messages").remove();
-                await db.ref("users").remove();
-                await db.ref("readReceipts").remove();
-                alert("System Reset Complete.");
-                location.reload();
-            }
-        } else {
-            alert("Incorrect PIN.");
+    const pinSnap = await db.ref("settings/adminPin").once("value");
+    const actualPin = pinSnap.exists() ? pinSnap.val() : "0000";
+
+    // Convert both to strings and trim spaces to guarantee a match
+    if(String(inputPin).trim() === String(actualPin).trim()) {
+        if(confirm("FINAL WARNING: Wipe everything?")) {
+            await db.ref("messages").remove();
+            await db.ref("users").remove();
+            await db.ref("readReceipts").remove();
+            alert("System Reset Complete.");
+            location.reload();
         }
+    } else {
+        alert("Incorrect PIN.");
     }
-
+}
     document.getElementById('msgInput').addEventListener("keypress", (e) => { if(e.key === "Enter") send(); });
 </script>
 

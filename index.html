@@ -48,6 +48,12 @@
         .active-chat { border-left: 4px solid var(--primary); background: #333 !important; }
         .blocked-user { opacity: 0.5; }
 
+        .unread-dot {
+            display: inline-block; width: 10px; height: 10px;
+            background: var(--danger); border-radius: 50%;
+            margin-left: 8px; box-shadow: 0 0 5px var(--danger);
+        }
+
         /* MODERATION & USER CONTROLS */
         .mod-btn { font-size: 10px; padding: 4px 8px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; width: auto; margin: 0; }
         .ban-btn { background: var(--danger); color: white; }
@@ -71,6 +77,8 @@
 
         .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 0; width: auto; margin: 0; opacity: 0.4; }
         .del-btn:hover { opacity: 1; }
+
+        .status-text { align-self: flex-end; font-size: 11px; color: #888; margin-top: -6px; margin-bottom: 4px; margin-right: 5px; font-weight: bold; }
 
         #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; }
         .reset-link { background: transparent; color: var(--danger); font-size: 10px; margin-top: 20px; border: 1px solid var(--danger); width: 100%; }
@@ -143,12 +151,16 @@
     let currentUser = null;
     let currentPath = "global";
     
-    // SPAM FILTER & BLOCK CONFIG
+    // FILTERS, BLOCKS, AND STATE
     let lastSentTime = 0;
     const COOLDOWN_MS = 2000;
     const BAD_WORDS = ["badword1", "badword2", "idiot", "stupid", "heck"];
+    
     let myBlockedUsers = {}; 
+    let myUnreadUsers = {};
     let allUsersSnap = null;
+    let currentMessages = [];
+    let roomReadReceipts = {};
 
     // --- 10 SEC HOLD TO WIPE ---
     let wipeTimer;
@@ -160,7 +172,7 @@
                 alert("System Reset Complete. Master PIN is now 0000.");
                 location.reload();
             }
-        }, 10000); // 10 seconds
+        }, 10000); 
     }
     function cancelWipeTimer() {
         clearTimeout(wipeTimer);
@@ -196,7 +208,7 @@
             document.getElementById('adminPanel').classList.remove('hidden');
         }
 
-        // Check if I get deleted or banned live
+        // Check if deleted or banned
         db.ref("users/" + currentUser).on("value", snap => {
             if(!snap.exists()) {
                 alert("Your account has been deleted by an admin.");
@@ -207,11 +219,17 @@
             }
         });
 
-        // Load my blocked users list
+        // Load blocked users
         db.ref("users/" + currentUser + "/blocked").on("value", snap => {
             myBlockedUsers = snap.val() || {};
             renderUserList(); 
-            loadMessages(); // Refresh chat to hide/show blocked user messages
+            renderChatUI(); 
+        });
+
+        // Load unread notifications
+        db.ref("users/" + currentUser + "/unread").on("value", snap => {
+            myUnreadUsers = snap.val() || {};
+            renderUserList();
         });
 
         loadUsers();
@@ -236,6 +254,7 @@
             
             const userData = child.val();
             const isBlocked = myBlockedUsers[child.key];
+            const hasUnread = myUnreadUsers[child.key];
             
             const div = document.createElement('div');
             div.className = `user-item ${isBlocked ? 'blocked-user' : ''}`;
@@ -252,10 +271,11 @@
             }
 
             let blockBtn = `<button class="mod-btn block-btn" onclick="toggleBlock('${child.key}', ${!isBlocked}); event.stopPropagation();">${isBlocked ? 'Unblock' : 'Block'}</button>`;
+            let unreadDot = hasUnread ? `<span class="unread-dot"></span>` : "";
 
             div.innerHTML = `
                 <div class="user-item-header" onclick="openDM('${child.key}')">
-                    <span>👤 ${child.key} ${userData.banned ? '🚫' : ''} ${isBlocked ? '🔇' : ''}</span>
+                    <span>👤 ${child.key} ${userData.banned ? '🚫' : ''} ${isBlocked ? '🔇' : ''} ${unreadDot}</span>
                 </div>
                 <div class="user-item-controls">
                     ${blockBtn}
@@ -265,9 +285,8 @@
             list.appendChild(div);
         });
         
-        // Re-apply highlight if a chat is active
         if(currentPath.startsWith("dm/")) {
-            uiHighlight("user-" + currentPath.split("_").find(u => u !== currentUser && u !== "dm/"));
+            uiHighlight("user-" + currentPath.split("dm/")[1].split("_").find(u => u !== currentUser));
         }
     }
 
@@ -315,7 +334,7 @@
         if(id && document.getElementById(id)) document.getElementById(id).classList.add('active-chat');
     }
 
-    // --- MESSAGING ---
+    // --- MESSAGING & READ RECEIPTS ---
     function cleanText(text) {
         let clean = text;
         BAD_WORDS.forEach(word => {
@@ -326,36 +345,97 @@
     }
 
     function loadMessages() {
-        const list = document.getElementById('messages');
-        db.ref("messages/" + currentPath).off(); 
+        db.ref("messages").off(); // Clear all old message listeners
+        db.ref("readReceipts").off();
         
-        db.ref("messages/" + currentPath).on("value", snap => {
-            list.innerHTML = "";
-            snap.forEach(child => {
-                const m = child.val();
-                
-                // HIDE MESSAGES FROM BLOCKED USERS
-                if(myBlockedUsers[m.user]) return;
+        // Handle read receipts for DMs
+        if(currentPath.startsWith("dm/")) {
+            const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
+            
+            // Immediately mark as read when opening & remove the notification dot
+            db.ref("readReceipts/" + currentPath + "/" + currentUser).set(Date.now());
+            db.ref("users/" + currentUser + "/unread/" + targetUser).remove();
 
-                const isMe = m.user === currentUser;
-                const isAdmin = currentUser === ADMIN_USER;
-                const time = m.time ? new Date(m.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
-                
-                const li = document.createElement('li');
-                li.className = `msg ${isMe ? 'me' : ''}`;
-                const delBtn = (isMe || isAdmin) ? `<button class="del-btn" onclick="deleteMsg('${child.key}')">✕</button>` : '';
-
-                li.innerHTML = `
-                    <div class="msg-text">
-                        <span class="msg-info">${m.user === ADMIN_USER ? '👑 ' : ''}${m.user} <span class="timestamp">${time}</span></span>
-                        ${m.text}
-                    </div>
-                    ${delBtn}
-                `;
-                list.appendChild(li);
+            // Listen to when the OTHER person reads our messages
+            db.ref("readReceipts/" + currentPath).on("value", snap => {
+                roomReadReceipts = snap.val() || {};
+                renderChatUI();
             });
-            list.scrollTop = list.scrollHeight;
+        } else {
+            roomReadReceipts = {};
+        }
+
+        // Fetch messages
+        db.ref("messages/" + currentPath).on("value", snap => {
+            currentMessages = [];
+            snap.forEach(child => {
+                currentMessages.push({ id: child.key, ...child.val() });
+            });
+
+            // If a message arrives while we are inside the DM, keep marking it as read
+            if(currentPath.startsWith("dm/")) {
+                const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
+                db.ref("readReceipts/" + currentPath + "/" + currentUser).set(Date.now());
+                db.ref("users/" + currentUser + "/unread/" + targetUser).remove();
+            }
+
+            renderChatUI();
         });
+    }
+
+    function renderChatUI() {
+        const list = document.getElementById('messages');
+        list.innerHTML = "";
+
+        // Find the absolute newest message sent by ME
+        let lastMyMsgId = null;
+        for(let i = currentMessages.length - 1; i >= 0; i--) {
+            if(currentMessages[i].user === currentUser) {
+                lastMyMsgId = currentMessages[i].id;
+                break;
+            }
+        }
+
+        let targetUser = currentPath.startsWith("dm/") ? currentPath.split("dm/")[1].split("_").find(u => u !== currentUser) : null;
+        let targetReadTime = targetUser ? (roomReadReceipts[targetUser] || 0) : 0;
+
+        currentMessages.forEach(m => {
+            if(myBlockedUsers[m.user]) return;
+
+            const isMe = m.user === currentUser;
+            const isAdmin = currentUser === ADMIN_USER;
+            const timeStr = m.time ? new Date(m.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+            
+            const li = document.createElement('li');
+            li.className = `msg ${isMe ? 'me' : ''}`;
+            
+            // Only admin can delete others, normal user can only delete theirs.
+            const delBtn = (isMe || isAdmin) ? `<button class="del-btn" onclick="deleteMsg('${m.id}')">✕</button>` : '';
+
+            li.innerHTML = `
+                <div class="msg-text">
+                    <span class="msg-info">${m.user === ADMIN_USER ? '👑 ' : ''}${m.user} <span class="timestamp">${timeStr}</span></span>
+                    ${m.text}
+                </div>
+                ${delBtn}
+            `;
+            list.appendChild(li);
+
+            // Add Seen/Delivered tag to the newest DM I sent
+            if (isMe && m.id === lastMyMsgId && currentPath.startsWith("dm/")) {
+                const statusDiv = document.createElement('div');
+                statusDiv.className = 'status-text';
+                
+                if (targetReadTime >= m.time) {
+                    statusDiv.innerHTML = "✓ Seen";
+                    statusDiv.style.color = "#44bb44"; // Green for seen
+                } else {
+                    statusDiv.innerHTML = "✓ Delivered";
+                }
+                list.appendChild(statusDiv);
+            }
+        });
+        list.scrollTop = list.scrollHeight;
     }
 
     function send() {
@@ -363,14 +443,12 @@
         const text = input.value.trim();
         if(!text) return;
 
-        // SPAM FILTER
         const now = Date.now();
         if(now - lastSentTime < COOLDOWN_MS) {
             alert("Slow down! 🍌 Chill for a second.");
             return;
         }
 
-        // BAD WORD FILTER
         const filteredText = cleanText(text);
 
         db.ref("messages/" + currentPath).push({
@@ -378,6 +456,12 @@
             text: filteredText,
             time: now
         });
+
+        // Trigger an Unread Notification for the other user if it's a DM
+        if(currentPath.startsWith("dm/")) {
+            const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
+            db.ref("users/" + targetUser + "/unread/" + currentUser).set(true);
+        }
         
         lastSentTime = now;
         input.value = "";

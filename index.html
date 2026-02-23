@@ -85,7 +85,6 @@
         .circle-seen { background: #44bb44; box-shadow: 0 0 5px #44bb44; }
 
         #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; }
-        .reset-link { background: transparent; color: var(--danger); font-size: 10px; margin-top: 20px; border: 1px solid var(--danger); width: 100%; }
         
         #adminTools { background: #1a1a1a; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #444; display:flex; flex-direction:column; gap:5px; }
     </style>
@@ -97,31 +96,21 @@
     <input id="u" placeholder="Username">
     <input id="p" type="password" placeholder="Password">
     <button onclick="auth('login')">Login</button>
-    
-    <button style="background:#444; color:white" 
-        onclick="auth('signup')" 
-        onmousedown="startWipeTimer()" 
-        onmouseup="cancelWipeTimer()" 
-        onmouseleave="cancelWipeTimer()"
-        ontouchstart="startWipeTimer()" 
-        ontouchend="cancelWipeTimer()"
-        ontouchcancel="cancelWipeTimer()"
-        oncontextmenu="return false;">Sign Up</button>
-            
-    <button class="reset-link" onclick="emergencyReset()">🚨 Emergency Wipe</button>
+    <button style="background:#444; color:white" onclick="auth('signup')">Sign Up</button>
 </div>
 
 <div id="app">
     <div id="sidebar">
         <h3 id="myUserDisplay" style="color:var(--primary); margin-top:0">🍌 Banana</h3>
         
+        <button class="sidebar-btn" onclick="openGlobalChat()" id="globalChatBtn">🌍 Global Chat</button>
+
         <div class="list-title">Direct Messages</div>
         <div id="userList" style="flex:1; overflow-y:auto;"></div>
 
         <div id="adminPanel" class="hidden">
             <div class="list-title">Admin Tools</div>
             <div id="adminTools">
-                <button onclick="updateResetPin()" style="font-size:10px; padding:5px; background:#444; color:white">Change Reset PIN</button>
                 <button onclick="wipeAllChatsLive()" style="font-size:10px; padding:5px; background:var(--danger); color:white">Delete All Chats Live</button>
             </div>
         </div>
@@ -143,9 +132,7 @@
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
@@ -160,7 +147,6 @@
         measurementId: "G-LTKZKNTPWK"
     };
     
-    // Leave these two lines exactly like this for v8:
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
@@ -173,8 +159,8 @@
     let lastSentTime = 0;
     const COOLDOWN_MS = 2000;
     
-    // BAD WORD FILTER IS HERE: Add any words you want to block inside these quotes
-    const BAD_WORDS = ["nigger", "fuck","shit","67","epstein","diddy","alt"]; 
+    // BAD WORD FILTER IS HERE
+    const BAD_WORDS = ["fuck", "shit", "67", "epstein", "diddy", "alt","nigger"]; 
     
     let myBlockedUsers = {}; 
     let myUnreadUsers = {};
@@ -182,50 +168,39 @@
     let currentMessages = [];
     let roomReadReceipts = {};
 
-    // --- 3 SEC HOLD TO WIPE ---
-    let wipeTimer;
-    function startWipeTimer() {
-        wipeTimer = setTimeout(async () => {
-            if(confirm("🚨 SECRET OVERRIDE DETECTED 🚨\nWipe entire database and reset PIN to 0000?")) {
-                await db.ref("messages").remove();
-                await db.ref("users").remove();
-                await db.ref("readReceipts").remove();
-                await db.ref("settings/adminPin").set("0000");
-                alert("System Reset Complete. Master PIN is now 0000.");
-                location.reload();
-            }
-        }, 3000); 
-    }
-
-    function cancelWipeTimer() {
-        clearTimeout(wipeTimer);
-    }
-
     // --- AUTH ---
     async function auth(type) {
-    const u = document.getElementById('u').value.trim().toLowerCase();
-    const p = document.getElementById('p').value.trim();
-    if(!u || !p) return alert("Fill everything in!");
+        const u = document.getElementById('u').value.trim().toLowerCase();
+        const p = document.getElementById('p').value.trim();
+        if(!u || !p) return alert("Fill everything in!");
 
-    // Firebase Auth needs an email format, so we fake one using their username
-    const fakeEmail = u + "@bananachat.com";
+        const fakeEmail = u + "@bananachat.com";
 
-    try {
-        if(type === 'signup') {
-            // 1. Create the secure account
-            await firebase.auth().createUserWithEmailAndPassword(fakeEmail, p);
-            // 2. Save their username in the database (Notice we DO NOT save the password here anymore!)
-            await db.ref("users/" + u).set({ banned: false });
-            start(u);
-        } else {
-            // Log them in securely
-            await firebase.auth().signInWithEmailAndPassword(fakeEmail, p);
-            start(u);
+        try {
+            if(type === 'signup') {
+                await firebase.auth().createUserWithEmailAndPassword(fakeEmail, p);
+                await db.ref("users/" + u).set({ banned: false });
+                start(u);
+            } else {
+                await firebase.auth().signInWithEmailAndPassword(fakeEmail, p);
+                start(u);
+            }
+        } catch (error) {
+            // Updated Error Messages
+            if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
+                alert("Incorrect password! Please try again.");
+            } else if (error.code === 'auth/user-not-found') {
+                alert("User not found. Please sign up first!");
+            } else if (error.code === 'auth/email-already-in-use') {
+                alert("Username already taken!");
+            } else if (error.code === 'auth/weak-password') {
+                alert("Password must be at least 6 characters.");
+            } else {
+                alert("Login/Signup failed: " + error.message);
+            }
         }
-    } catch (error) {
-        alert("Login/Signup failed: " + error.message);
     }
-}
+
     function start(user) {
         currentUser = user;
         document.getElementById('loginPage').classList.add('hidden');
@@ -260,15 +235,25 @@
         loadUsers();
     }
 
-    // --- NEW: CHANGE PASSWORD ---
+    // --- CHANGE PASSWORD ---
     async function changePassword() {
         if(!currentUser) return;
-        const newPass = prompt("Enter your new password:");
-        if(newPass && newPass.trim() !== "") {
-            await db.ref("users/" + currentUser + "/password").set(newPass.trim());
-            alert("Password successfully changed!");
+        const newPass = prompt("Enter your new password (must be at least 6 characters):");
+        
+        if(newPass && newPass.trim().length >= 6) {
+            try {
+                const user = firebase.auth().currentUser;
+                await user.updatePassword(newPass.trim());
+                alert("Password successfully changed!");
+            } catch(error) {
+                if(error.code === 'auth/requires-recent-login') {
+                    alert("For security reasons, please log out and log back in before changing your password.");
+                } else {
+                    alert("Error changing password: " + error.message);
+                }
+            }
         } else if (newPass !== null) {
-            alert("Password cannot be empty.");
+            alert("Password must be at least 6 characters long.");
         }
     }
 
@@ -346,6 +331,14 @@
         }
     }
 
+    // --- NEW: GLOBAL CHAT ---
+    function openGlobalChat() {
+        currentPath = "global";
+        document.getElementById('chatTitle').innerText = "🌍 Global Chat";
+        uiHighlight("globalChatBtn");
+        loadMessages();
+    }
+
     function openDM(targetUser) {
         if(myBlockedUsers[targetUser]) {
             alert("You have blocked this user. Unblock them to send a DM.");
@@ -359,7 +352,7 @@
     }
 
     function uiHighlight(id) {
-        document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active-chat'));
+        document.querySelectorAll('.user-item, .sidebar-btn').forEach(el => el.classList.remove('active-chat'));
         if(id && document.getElementById(id)) document.getElementById(id).classList.add('active-chat');
     }
 
@@ -462,7 +455,7 @@
     }
 
     function send() {
-        if(!currentPath) return alert("Please select a user to chat with first!");
+        if(!currentPath) return alert("Please select a user or global chat first!");
 
         const input = document.getElementById('msgInput');
         const text = input.value.trim();
@@ -496,38 +489,11 @@
     }
 
     // --- ADMIN CONTROLS ---
-    async function updateResetPin() {
-        const newPin = prompt("Set new Master Reset PIN:");
-        if(newPin) {
-            await db.ref("settings/adminPin").set(newPin);
-            alert("Reset PIN updated!");
-        }
-    }
-
     async function wipeAllChatsLive() {
         if(confirm("🚨 WARNING: Are you sure you want to delete ALL messages across ALL chats? This cannot be undone.")) {
             await db.ref("messages").remove();
+            await db.ref("readReceipts").remove();
             alert("All chats have been successfully deleted.");
-        }
-    }
-
-    async function emergencyReset() {
-        const inputPin = prompt("Enter Master PIN to WIPE ALL DATA:");
-        if (inputPin === null) return; 
-
-        const pinSnap = await db.ref("settings/adminPin").once("value");
-        const actualPin = pinSnap.exists() ? pinSnap.val() : "0000";
-
-        if(String(inputPin).trim() === String(actualPin).trim()) {
-            if(confirm("FINAL WARNING: Wipe everything?")) {
-                await db.ref("messages").remove();
-                await db.ref("users").remove();
-                await db.ref("readReceipts").remove();
-                alert("System Reset Complete.");
-                location.reload();
-            }
-        } else {
-            alert("Incorrect PIN.");
         }
     }
     

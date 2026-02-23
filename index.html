@@ -78,7 +78,11 @@
         .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 0; width: auto; margin: 0; opacity: 0.4; }
         .del-btn:hover { opacity: 1; }
 
-        .status-text { align-self: flex-end; font-size: 11px; color: #888; margin-top: -6px; margin-bottom: 4px; margin-right: 5px; font-weight: bold; }
+        /* STATUS CIRCLES */
+        .status-text { align-self: flex-end; font-size: 11px; color: #888; margin-top: -6px; margin-bottom: 4px; margin-right: 5px; font-weight: bold; display: flex; align-items: center; gap: 5px; }
+        .status-circle { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+        .circle-delivered { border: 2px solid #888; background: transparent; box-sizing: border-box; }
+        .circle-seen { background: #44bb44; box-shadow: 0 0 5px #44bb44; }
 
         #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; }
         .reset-link { background: transparent; color: var(--danger); font-size: 10px; margin-top: 20px; border: 1px solid var(--danger); width: 100%; }
@@ -150,6 +154,7 @@
     const ADMIN_USER = "banana777";
     let currentUser = null;
     let currentPath = "global";
+    let activeChatPath = null; // Used to properly turn off Firebase listeners
     
     // FILTERS, BLOCKS, AND STATE
     let lastSentTime = 0;
@@ -167,7 +172,9 @@
     function startWipeTimer() {
         wipeTimer = setTimeout(async () => {
             if(confirm("🚨 SECRET OVERRIDE DETECTED 🚨\nWipe entire database and reset PIN to 0000?")) {
-                await db.ref().remove();
+                await db.ref("messages").remove();
+                await db.ref("users").remove();
+                await db.ref("readReceipts").remove();
                 await db.ref("settings/adminPin").set("0000");
                 alert("System Reset Complete. Master PIN is now 0000.");
                 location.reload();
@@ -345,8 +352,12 @@
     }
 
     function loadMessages() {
-        db.ref("messages").off(); // Clear all old message listeners
-        db.ref("readReceipts").off();
+        // DETACH PREVIOUS LISTENERS PERFECTLY to stop UI bleeding
+        if (activeChatPath) {
+            db.ref("messages/" + activeChatPath).off();
+            db.ref("readReceipts/" + activeChatPath).off();
+        }
+        activeChatPath = currentPath;
         
         // Handle read receipts for DMs
         if(currentPath.startsWith("dm/")) {
@@ -421,16 +432,15 @@
             `;
             list.appendChild(li);
 
-            // Add Seen/Delivered tag to the newest DM I sent
+            // Add Circle Status indicator to the newest DM I sent
             if (isMe && m.id === lastMyMsgId && currentPath.startsWith("dm/")) {
                 const statusDiv = document.createElement('div');
                 statusDiv.className = 'status-text';
                 
                 if (targetReadTime >= m.time) {
-                    statusDiv.innerHTML = "✓ Seen";
-                    statusDiv.style.color = "#44bb44"; // Green for seen
+                    statusDiv.innerHTML = `<span class="status-circle circle-seen"></span> Read`;
                 } else {
-                    statusDiv.innerHTML = "✓ Delivered";
+                    statusDiv.innerHTML = `<span class="status-circle circle-delivered"></span> Delivered`;
                 }
                 list.appendChild(statusDiv);
             }
@@ -487,7 +497,9 @@
 
         if(inputPin === actualPin) {
             if(confirm("FINAL WARNING: Wipe everything?")) {
-                await db.ref().remove();
+                await db.ref("messages").remove();
+                await db.ref("users").remove();
+                await db.ref("readReceipts").remove();
                 alert("System Reset Complete.");
                 location.reload();
             }

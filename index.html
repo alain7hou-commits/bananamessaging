@@ -87,7 +87,7 @@
         #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; }
         .reset-link { background: transparent; color: var(--danger); font-size: 10px; margin-top: 20px; border: 1px solid var(--danger); width: 100%; }
         
-        #adminTools { background: #1a1a1a; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #444; }
+        #adminTools { background: #1a1a1a; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #444; display:flex; flex-direction:column; gap:5px; }
     </style>
 </head>
 <body>
@@ -115,8 +115,6 @@
     <div id="sidebar">
         <h3 id="myUserDisplay" style="color:var(--primary); margin-top:0">🍌 Banana</h3>
         
-        <button class="sidebar-btn" onclick="openGlobal()">🌍 Global Chat</button>
-        
         <div class="list-title">Direct Messages</div>
         <div id="userList" style="flex:1; overflow-y:auto;"></div>
 
@@ -124,6 +122,7 @@
             <div class="list-title">Admin Tools</div>
             <div id="adminTools">
                 <button onclick="updateResetPin()" style="font-size:10px; padding:5px; background:#444; color:white">Change Reset PIN</button>
+                <button onclick="wipeAllChatsLive()" style="font-size:10px; padding:5px; background:var(--danger); color:white">Delete All Chats Live</button>
             </div>
         </div>
         
@@ -132,7 +131,7 @@
 
     <div id="chat">
         <div id="top">
-            <span id="chatTitle">Global Chat</span>
+            <span id="chatTitle">Select a user to chat</span>
         </div>
         <ul id="messages"></ul>
         <div id="sendBar">
@@ -155,13 +154,15 @@
 
     const ADMIN_USER = "banana777";
     let currentUser = null;
-    let currentPath = "global";
-    let activeChatPath = null; // Used to properly turn off Firebase listeners
+    let currentPath = null; // Changed from "global" to null
+    let activeChatPath = null; 
     
     // FILTERS, BLOCKS, AND STATE
     let lastSentTime = 0;
     const COOLDOWN_MS = 2000;
-    const BAD_WORDS = ["badword1", "badword2", "idiot", "stupid", "heck"];
+    
+    // BAD WORD FILTER IS HERE: Add any words you want to block inside these quotes
+    const BAD_WORDS = ["badword1", "badword2", "idiot", "stupid", "heck", "crap"]; 
     
     let myBlockedUsers = {}; 
     let myUnreadUsers = {};
@@ -170,23 +171,23 @@
     let roomReadReceipts = {};
 
     // --- 3 SEC HOLD TO WIPE ---
-let wipeTimer;
-function startWipeTimer() {
-    wipeTimer = setTimeout(async () => {
-        if(confirm("🚨 SECRET OVERRIDE DETECTED 🚨\nWipe entire database and reset PIN to 0000?")) {
-            await db.ref("messages").remove();
-            await db.ref("users").remove();
-            await db.ref("readReceipts").remove();
-            await db.ref("settings/adminPin").set("0000");
-            alert("System Reset Complete. Master PIN is now 0000.");
-            location.reload();
-        }
-    }, 3000); // Changed to 3 seconds. 10 seconds is too prone to micro-movements.
-}
+    let wipeTimer;
+    function startWipeTimer() {
+        wipeTimer = setTimeout(async () => {
+            if(confirm("🚨 SECRET OVERRIDE DETECTED 🚨\nWipe entire database and reset PIN to 0000?")) {
+                await db.ref("messages").remove();
+                await db.ref("users").remove();
+                await db.ref("readReceipts").remove();
+                await db.ref("settings/adminPin").set("0000");
+                alert("System Reset Complete. Master PIN is now 0000.");
+                location.reload();
+            }
+        }, 3000); 
+    }
 
-function cancelWipeTimer() {
-    clearTimeout(wipeTimer);
-}
+    function cancelWipeTimer() {
+        clearTimeout(wipeTimer);
+    }
 
     // --- AUTH ---
     async function auth(type) {
@@ -218,7 +219,6 @@ function cancelWipeTimer() {
             document.getElementById('adminPanel').classList.remove('hidden');
         }
 
-        // Check if deleted or banned
         db.ref("users/" + currentUser).on("value", snap => {
             if(!snap.exists()) {
                 alert("Your account has been deleted by an admin.");
@@ -229,21 +229,19 @@ function cancelWipeTimer() {
             }
         });
 
-        // Load blocked users
         db.ref("users/" + currentUser + "/blocked").on("value", snap => {
             myBlockedUsers = snap.val() || {};
             renderUserList(); 
             renderChatUI(); 
         });
 
-        // Load unread notifications
         db.ref("users/" + currentUser + "/unread").on("value", snap => {
             myUnreadUsers = snap.val() || {};
             renderUserList();
         });
 
         loadUsers();
-        openGlobal(); 
+        // Removed openGlobal() so it starts blank
     }
 
     // --- SIDEBAR & NAVIGATION ---
@@ -295,7 +293,7 @@ function cancelWipeTimer() {
             list.appendChild(div);
         });
         
-        if(currentPath.startsWith("dm/")) {
+        if(currentPath && currentPath.startsWith("dm/")) {
             uiHighlight("user-" + currentPath.split("dm/")[1].split("_").find(u => u !== currentUser));
         }
     }
@@ -318,13 +316,6 @@ function cancelWipeTimer() {
         if(confirm(`Completely DELETE the account for ${targetUser}? This cannot be undone.`)) {
             db.ref("users/" + targetUser).remove();
         }
-    }
-
-    function openGlobal() {
-        currentPath = "global";
-        document.getElementById('chatTitle').innerText = "🌍 Global Chat";
-        uiHighlight(null);
-        loadMessages();
     }
 
     function openDM(targetUser) {
@@ -355,22 +346,18 @@ function cancelWipeTimer() {
     }
 
     function loadMessages() {
-        // DETACH PREVIOUS LISTENERS PERFECTLY to stop UI bleeding
         if (activeChatPath) {
             db.ref("messages/" + activeChatPath).off();
             db.ref("readReceipts/" + activeChatPath).off();
         }
         activeChatPath = currentPath;
         
-        // Handle read receipts for DMs
-        if(currentPath.startsWith("dm/")) {
+        if(currentPath && currentPath.startsWith("dm/")) {
             const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
             
-            // Immediately mark as read when opening & remove the notification dot
             db.ref("readReceipts/" + currentPath + "/" + currentUser).set(Date.now());
             db.ref("users/" + currentUser + "/unread/" + targetUser).remove();
 
-            // Listen to when the OTHER person reads our messages
             db.ref("readReceipts/" + currentPath).on("value", snap => {
                 roomReadReceipts = snap.val() || {};
                 renderChatUI();
@@ -379,15 +366,13 @@ function cancelWipeTimer() {
             roomReadReceipts = {};
         }
 
-        // Fetch messages
         db.ref("messages/" + currentPath).on("value", snap => {
             currentMessages = [];
             snap.forEach(child => {
                 currentMessages.push({ id: child.key, ...child.val() });
             });
 
-            // If a message arrives while we are inside the DM, keep marking it as read
-            if(currentPath.startsWith("dm/")) {
+            if(currentPath && currentPath.startsWith("dm/")) {
                 const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
                 db.ref("readReceipts/" + currentPath + "/" + currentUser).set(Date.now());
                 db.ref("users/" + currentUser + "/unread/" + targetUser).remove();
@@ -401,7 +386,6 @@ function cancelWipeTimer() {
         const list = document.getElementById('messages');
         list.innerHTML = "";
 
-        // Find the absolute newest message sent by ME
         let lastMyMsgId = null;
         for(let i = currentMessages.length - 1; i >= 0; i--) {
             if(currentMessages[i].user === currentUser) {
@@ -410,7 +394,7 @@ function cancelWipeTimer() {
             }
         }
 
-        let targetUser = currentPath.startsWith("dm/") ? currentPath.split("dm/")[1].split("_").find(u => u !== currentUser) : null;
+        let targetUser = currentPath && currentPath.startsWith("dm/") ? currentPath.split("dm/")[1].split("_").find(u => u !== currentUser) : null;
         let targetReadTime = targetUser ? (roomReadReceipts[targetUser] || 0) : 0;
 
         currentMessages.forEach(m => {
@@ -423,7 +407,6 @@ function cancelWipeTimer() {
             const li = document.createElement('li');
             li.className = `msg ${isMe ? 'me' : ''}`;
             
-            // Only admin can delete others, normal user can only delete theirs.
             const delBtn = (isMe || isAdmin) ? `<button class="del-btn" onclick="deleteMsg('${m.id}')">✕</button>` : '';
 
             li.innerHTML = `
@@ -435,8 +418,7 @@ function cancelWipeTimer() {
             `;
             list.appendChild(li);
 
-            // Add Circle Status indicator to the newest DM I sent
-            if (isMe && m.id === lastMyMsgId && currentPath.startsWith("dm/")) {
+            if (isMe && m.id === lastMyMsgId && currentPath && currentPath.startsWith("dm/")) {
                 const statusDiv = document.createElement('div');
                 statusDiv.className = 'status-text';
                 
@@ -452,6 +434,9 @@ function cancelWipeTimer() {
     }
 
     function send() {
+        // SAFEGUARD ADDED HERE: Prevents sending if no chat is active
+        if(!currentPath) return alert("Please select a user to chat with first!");
+
         const input = document.getElementById('msgInput');
         const text = input.value.trim();
         if(!text) return;
@@ -470,7 +455,6 @@ function cancelWipeTimer() {
             time: now
         });
 
-        // Trigger an Unread Notification for the other user if it's a DM
         if(currentPath.startsWith("dm/")) {
             const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
             db.ref("users/" + targetUser + "/unread/" + currentUser).set(true);
@@ -493,28 +477,33 @@ function cancelWipeTimer() {
         }
     }
 
-    async function emergencyReset() {
-    const inputPin = prompt("Enter Master PIN to WIPE ALL DATA:");
-    
-    // Exit quietly if the user clicks "Cancel"
-    if (inputPin === null) return; 
-
-    const pinSnap = await db.ref("settings/adminPin").once("value");
-    const actualPin = pinSnap.exists() ? pinSnap.val() : "0000";
-
-    // Convert both to strings and trim spaces to guarantee a match
-    if(String(inputPin).trim() === String(actualPin).trim()) {
-        if(confirm("FINAL WARNING: Wipe everything?")) {
+    // NEW FUNCTION: Delete all chats live
+    async function wipeAllChatsLive() {
+        if(confirm("🚨 WARNING: Are you sure you want to delete ALL messages across ALL chats? This cannot be undone.")) {
             await db.ref("messages").remove();
-            await db.ref("users").remove();
-            await db.ref("readReceipts").remove();
-            alert("System Reset Complete.");
-            location.reload();
+            alert("All chats have been successfully deleted.");
         }
-    } else {
-        alert("Incorrect PIN.");
     }
-}
+
+    async function emergencyReset() {
+        const inputPin = prompt("Enter Master PIN to WIPE ALL DATA:");
+        if (inputPin === null) return; 
+
+        const pinSnap = await db.ref("settings/adminPin").once("value");
+        const actualPin = pinSnap.exists() ? pinSnap.val() : "0000";
+
+        if(String(inputPin).trim() === String(actualPin).trim()) {
+            if(confirm("FINAL WARNING: Wipe everything?")) {
+                await db.ref("messages").remove();
+                await db.ref("users").remove();
+                await db.ref("readReceipts").remove();
+                alert("System Reset Complete.");
+                location.reload();
+            }
+        } else {
+            alert("Incorrect PIN.");
+        }
+    }
     document.getElementById('msgInput').addEventListener("keypress", (e) => { if(e.key === "Enter") send(); });
 </script>
 

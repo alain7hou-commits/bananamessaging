@@ -126,7 +126,8 @@
             </div>
         </div>
         
-        <button onclick="location.reload()" style="background:var(--danger); margin-top:10px">Logout</button>
+        <button onclick="changePassword()" style="background:#444; color:white; margin-top:10px; font-size: 14px;">Change Password</button>
+        <button onclick="location.reload()" style="background:var(--danger); margin-top:10px; font-size: 14px;">Logout</button>
     </div>
 
     <div id="chat">
@@ -154,7 +155,7 @@
 
     const ADMIN_USER = "banana777";
     let currentUser = null;
-    let currentPath = null; // Changed from "global" to null
+    let currentPath = null;
     let activeChatPath = null; 
     
     // FILTERS, BLOCKS, AND STATE
@@ -162,7 +163,7 @@
     const COOLDOWN_MS = 2000;
     
     // BAD WORD FILTER IS HERE: Add any words you want to block inside these quotes
-    const BAD_WORDS = ["nigger", "fuck", "shit", "67", "bitch", "penis","epstein","NIGGER","FUCK","SHIT","PENIS"]; 
+    const BAD_WORDS = ["nigger", "fuck","shit","67","epstein","diddy","alt"]; 
     
     let myBlockedUsers = {}; 
     let myUnreadUsers = {};
@@ -241,7 +242,18 @@
         });
 
         loadUsers();
-        // Removed openGlobal() so it starts blank
+    }
+
+    // --- NEW: CHANGE PASSWORD ---
+    async function changePassword() {
+        if(!currentUser) return;
+        const newPass = prompt("Enter your new password:");
+        if(newPass && newPass.trim() !== "") {
+            await db.ref("users/" + currentUser + "/password").set(newPass.trim());
+            alert("Password successfully changed!");
+        } else if (newPass !== null) {
+            alert("Password cannot be empty.");
+        }
     }
 
     // --- SIDEBAR & NAVIGATION ---
@@ -434,7 +446,6 @@
     }
 
     function send() {
-        // SAFEGUARD ADDED HERE: Prevents sending if no chat is active
         if(!currentPath) return alert("Please select a user to chat with first!");
 
         const input = document.getElementById('msgInput');
@@ -477,7 +488,6 @@
         }
     }
 
-    // NEW FUNCTION: Delete all chats live
     async function wipeAllChatsLive() {
         if(confirm("🚨 WARNING: Are you sure you want to delete ALL messages across ALL chats? This cannot be undone.")) {
             await db.ref("messages").remove();
@@ -504,6 +514,7 @@
             alert("Incorrect PIN.");
         }
     }
+    
     document.getElementById('msgInput').addEventListener("keypress", (e) => { if(e.key === "Enter") send(); });
 </script>
 

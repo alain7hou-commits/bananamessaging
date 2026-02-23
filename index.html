@@ -142,6 +142,7 @@
     </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>    
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
@@ -192,24 +193,29 @@
 
     // --- AUTH ---
     async function auth(type) {
-        const u = document.getElementById('u').value.trim().toLowerCase();
-        const p = document.getElementById('p').value.trim();
-        if(!u || !p) return alert("Fill everything in!");
+    const u = document.getElementById('u').value.trim().toLowerCase();
+    const p = document.getElementById('p').value.trim();
+    if(!u || !p) return alert("Fill everything in!");
 
-        const ref = db.ref("users/" + u);
-        const snap = await ref.once("value");
+    // Firebase Auth needs an email format, so we fake one using their username
+    const fakeEmail = u + "@bananachat.com";
 
+    try {
         if(type === 'signup') {
-            if(snap.exists()) return alert("Username taken!");
-            await ref.set({ password: p, banned: false });
+            // 1. Create the secure account
+            await firebase.auth().createUserWithEmailAndPassword(fakeEmail, p);
+            // 2. Save their username in the database (Notice we DO NOT save the password here anymore!)
+            await db.ref("users/" + u).set({ banned: false });
             start(u);
         } else {
-            if(!snap.exists() || snap.val().password !== p) return alert("Wrong info!");
-            if(snap.val().banned) return alert("YOU ARE BANNED 🚫");
+            // Log them in securely
+            await firebase.auth().signInWithEmailAndPassword(fakeEmail, p);
             start(u);
         }
+    } catch (error) {
+        alert("Login/Signup failed: " + error.message);
     }
-
+}
     function start(user) {
         currentUser = user;
         document.getElementById('loginPage').classList.add('hidden');

@@ -158,8 +158,6 @@
     // FILTERS, BLOCKS, AND STATE
     let lastSentTime = 0;
     const COOLDOWN_MS = 2000;
-    
-    // BAD WORD FILTER IS HERE
     const BAD_WORDS = ["fuck", "shit", "67", "epstein", "diddy", "alt"]; 
     
     let myBlockedUsers = {}; 
@@ -196,7 +194,7 @@
             } else if (error.code === 'auth/weak-password') {
                 alert("Password must be at least 6 characters.");
             } else {
-                alert("Login/Signup failed: " + error.message);
+                alert("Login/Signup error: " + error.message);
             }
         }
     }
@@ -246,11 +244,7 @@
                 await user.updatePassword(newPass.trim());
                 alert("Password successfully changed!");
             } catch(error) {
-                if(error.code === 'auth/requires-recent-login') {
-                    alert("For security reasons, please log out and log back in before changing your password.");
-                } else {
-                    alert("Error changing password: " + error.message);
-                }
+                alert("Error changing password: " + error.message);
             }
         } else if (newPass !== null) {
             alert("Password must be at least 6 characters long.");
@@ -275,7 +269,11 @@
             
             const userData = child.val();
             const isBlocked = myBlockedUsers[child.key];
-            const hasUnread = myUnreadUsers[child.key];
+            
+            // Hides unread dot if you are currently looking at that chat
+            const expectedChatPath = "dm/" + [currentUser, child.key].sort().join("_");
+            const isCurrentChat = (currentPath === expectedChatPath);
+            const hasUnread = myUnreadUsers[child.key] && !isCurrentChat;
             
             const div = document.createElement('div');
             div.className = `user-item ${isBlocked ? 'blocked-user' : ''}`;
@@ -326,12 +324,12 @@
     }
 
     function deleteUser(targetUser) {
-        if(confirm(`Completely DELETE the account for ${targetUser}? This cannot be undone.`)) {
+        if(confirm(`Completely DELETE the account for ${targetUser}?`)) {
             db.ref("users/" + targetUser).remove();
         }
     }
 
-    // --- NEW: GLOBAL CHAT ---
+    // --- GLOBAL CHAT ---
     function openGlobalChat() {
         currentPath = "global";
         document.getElementById('chatTitle').innerText = "🌍 Global Chat";
@@ -376,6 +374,7 @@
         if(currentPath && currentPath.startsWith("dm/")) {
             const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
             
+            // Mark as read immediately
             db.ref("readReceipts/" + currentPath + "/" + currentUser).set(Date.now());
             db.ref("users/" + currentUser + "/unread/" + targetUser).remove();
 
@@ -395,6 +394,7 @@
 
             if(currentPath && currentPath.startsWith("dm/")) {
                 const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
+                // Keep updating read receipt as new messages flow in
                 db.ref("readReceipts/" + currentPath + "/" + currentUser).set(Date.now());
                 db.ref("users/" + currentUser + "/unread/" + targetUser).remove();
             }
@@ -405,6 +405,11 @@
 
     function renderChatUI() {
         const list = document.getElementById('messages');
+        
+        // Save scroll position
+        const isAtBottom = list.scrollHeight - list.scrollTop <= list.clientHeight + 50; 
+        const prevScroll = list.scrollTop;
+        
         list.innerHTML = "";
 
         let lastMyMsgId = null;
@@ -428,6 +433,7 @@
             const li = document.createElement('li');
             li.className = `msg ${isMe ? 'me' : ''}`;
             
+            // Instant delete (No confirm prompt)
             const delBtn = (isMe || isAdmin) ? `<button class="del-btn" onclick="deleteMsg('${m.id}')">✕</button>` : '';
 
             li.innerHTML = `
@@ -443,15 +449,22 @@
                 const statusDiv = document.createElement('div');
                 statusDiv.className = 'status-text';
                 
-                if (targetReadTime >= m.time) {
-                    statusDiv.innerHTML = `<span class="status-circle circle-seen"></span> Read`;
+                // Added a 10 second tolerance window to account for computer clock skew
+                if (targetReadTime >= (m.time - 10000)) {
+                    statusDiv.innerHTML = `<span class="status-circle circle-seen"></span> Seen`;
                 } else {
                     statusDiv.innerHTML = `<span class="status-circle circle-delivered"></span> Delivered`;
                 }
                 list.appendChild(statusDiv);
             }
         });
-        list.scrollTop = list.scrollHeight;
+        
+        // Restore scroll intelligently
+        if (isAtBottom) {
+            list.scrollTop = list.scrollHeight;
+        } else {
+            list.scrollTop = prevScroll;
+        }
     }
 
     function send() {
@@ -485,15 +498,20 @@
     }
 
     function deleteMsg(msgID) {
-        if(confirm("Delete message?")) db.ref("messages/" + currentPath + "/" + msgID).remove();
+        // Removed the confirm pop-up to make deleting instant
+        db.ref("messages/" + currentPath + "/" + msgID).remove();
     }
 
     // --- ADMIN CONTROLS ---
     async function wipeAllChatsLive() {
-        if(confirm("🚨 WARNING: Are you sure you want to delete ALL messages across ALL chats? This cannot be undone.")) {
-            await db.ref("messages").remove();
-            await db.ref("readReceipts").remove();
-            alert("All chats have been successfully deleted.");
+        if(confirm("🚨 WARNING: Delete ALL messages across ALL chats?")) {
+            try {
+                await db.ref("messages").remove();
+                await db.ref("readReceipts").remove();
+                alert("All chats have been successfully deleted.");
+            } catch (error) {
+                alert("Wipe failed! Check your Firebase Database Rules: " + error.message);
+            }
         }
     }
     

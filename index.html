@@ -150,9 +150,17 @@
 
 <script>
     const firebaseConfig = {
-        apiKey: "AIzaSyCC5lY7xZBBbEQYOzLmumJImAH5dQIbNtk",
-        databaseURL: "https://bananamessagingsite-default-rtdb.firebaseio.com"
+        apiKey: "AIzaSyB7wjLsAU5XrHhXgXvLblURv8i_5ViBHGE",
+        authDomain: "bananamessagingsite.firebaseapp.com",
+        databaseURL: "https://bananamessagingsite-default-rtdb.firebaseio.com",
+        projectId: "bananamessagingsite",
+        storageBucket: "bananamessagingsite.firebasestorage.app",
+        messagingSenderId: "540607876740",
+        appId: "1:540607876740:web:99505bf5d4e6b665897cd1",
+        measurementId: "G-LTKZKNTPWK"
     };
+    
+    // Leave these two lines exactly like this for v8:
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 

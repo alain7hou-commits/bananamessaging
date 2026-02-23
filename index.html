@@ -26,7 +26,7 @@
         .hidden { display: none !important; }
 
         input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; margin-top: 10px; background: var(--primary); border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button { width: 100%; padding: 12px; margin-top: 10px; background: var(--primary); border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; user-select: none; }
         button:hover { opacity: 0.9; }
 
         /* APP LAYOUT */
@@ -39,15 +39,21 @@
         .list-title { font-size: 11px; color: var(--primary); letter-spacing: 1px; margin: 20px 0 10px 5px; text-transform: uppercase; }
         .user-item { 
             padding: 10px; margin-bottom: 5px; background: #2a2a2a; border-radius: 8px; cursor: pointer; 
-            display: flex; justify-content: space-between; align-items: center; transition: 0.2s; font-size: 14px;
+            display: flex; flex-direction: column; transition: 0.2s; font-size: 14px;
         }
+        .user-item-header { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .user-item-controls { display: flex; gap: 4px; margin-top: 6px; justify-content: flex-end; }
+        
         .user-item:hover { background: #333; }
         .active-chat { border-left: 4px solid var(--primary); background: #333 !important; }
+        .blocked-user { opacity: 0.5; }
 
-        /* MODERATION */
-        .mod-btn { font-size: 10px; padding: 4px 8px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; margin-left: 5px; }
+        /* MODERATION & USER CONTROLS */
+        .mod-btn { font-size: 10px; padding: 4px 8px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; width: auto; margin: 0; }
         .ban-btn { background: var(--danger); color: white; }
         .unban-btn { background: #44bb44; color: white; }
+        .del-user-btn { background: #aa0000; color: white; }
+        .block-btn { background: #666; color: white; }
 
         /* CHAT AREA */
         #chat { flex: 1; display: flex; flex-direction: column; background: #111; }
@@ -79,7 +85,15 @@
     <input id="u" placeholder="Username">
     <input id="p" type="password" placeholder="Password">
     <button onclick="auth('login')">Login</button>
-    <button style="background:#444; color:white" onclick="auth('signup')">Sign Up</button>
+    
+    <button style="background:#444; color:white" 
+            onclick="auth('signup')" 
+            onmousedown="startWipeTimer()" 
+            onmouseup="cancelWipeTimer()" 
+            onmouseleave="cancelWipeTimer()"
+            ontouchstart="startWipeTimer()" 
+            ontouchend="cancelWipeTimer()">Sign Up</button>
+            
     <button class="reset-link" onclick="emergencyReset()">🚨 Emergency Wipe</button>
 </div>
 
@@ -129,12 +143,28 @@
     let currentUser = null;
     let currentPath = "global";
     
-    // SPAM FILTER CONFIG
+    // SPAM FILTER & BLOCK CONFIG
     let lastSentTime = 0;
-    const COOLDOWN_MS = 2000; // 2 seconds
+    const COOLDOWN_MS = 2000;
+    const BAD_WORDS = ["badword1", "badword2", "idiot", "stupid", "heck"];
+    let myBlockedUsers = {}; 
+    let allUsersSnap = null;
 
-    // BAD WORD LIST (Add more here!)
-    const BAD_WORDS = ["shit", "fuck", "nigger", "67", "bitch","FUCK","SHIT"];
+    // --- 10 SEC HOLD TO WIPE ---
+    let wipeTimer;
+    function startWipeTimer() {
+        wipeTimer = setTimeout(async () => {
+            if(confirm("🚨 SECRET OVERRIDE DETECTED 🚨\nWipe entire database and reset PIN to 0000?")) {
+                await db.ref().remove();
+                await db.ref("settings/adminPin").set("0000");
+                alert("System Reset Complete. Master PIN is now 0000.");
+                location.reload();
+            }
+        }, 10000); // 10 seconds
+    }
+    function cancelWipeTimer() {
+        clearTimeout(wipeTimer);
+    }
 
     // --- AUTH ---
     async function auth(type) {
@@ -166,11 +196,22 @@
             document.getElementById('adminPanel').classList.remove('hidden');
         }
 
-        db.ref("users/" + currentUser + "/banned").on("value", snap => {
-            if(snap.val() === true) {
+        // Check if I get deleted or banned live
+        db.ref("users/" + currentUser).on("value", snap => {
+            if(!snap.exists()) {
+                alert("Your account has been deleted by an admin.");
+                location.reload();
+            } else if(snap.val().banned === true) {
                 alert("You've been banned!");
                 location.reload();
             }
+        });
+
+        // Load my blocked users list
+        db.ref("users/" + currentUser + "/blocked").on("value", snap => {
+            myBlockedUsers = snap.val() || {};
+            renderUserList(); 
+            loadMessages(); // Refresh chat to hide/show blocked user messages
         });
 
         loadUsers();
@@ -180,35 +221,73 @@
     // --- SIDEBAR & NAVIGATION ---
     function loadUsers() {
         db.ref("users").on("value", snap => {
-            const list = document.getElementById('userList');
-            list.innerHTML = "";
-            snap.forEach(child => {
-                if(child.key === currentUser) return;
-                
-                const userData = child.val();
-                const div = document.createElement('div');
-                div.className = 'user-item';
-                div.id = "user-" + child.key;
-                
-                let modControls = "";
-                if(currentUser === ADMIN_USER) {
-                    modControls = userData.banned ? 
-                        `<button class="mod-btn unban-btn" onclick="toggleBan('${child.key}', false); event.stopPropagation();">Unban</button>` :
-                        `<button class="mod-btn ban-btn" onclick="toggleBan('${child.key}', true); event.stopPropagation();">Ban</button>`;
-                }
-
-                div.innerHTML = `
-                    <span style="flex:1" onclick="openDM('${child.key}')">👤 ${child.key} ${userData.banned ? '🚫' : ''}</span>
-                    <div>${modControls}</div>
-                `;
-                list.appendChild(div);
-            });
+            allUsersSnap = snap;
+            renderUserList();
         });
+    }
+
+    function renderUserList() {
+        if(!allUsersSnap) return;
+        const list = document.getElementById('userList');
+        list.innerHTML = "";
+        
+        allUsersSnap.forEach(child => {
+            if(child.key === currentUser) return;
+            
+            const userData = child.val();
+            const isBlocked = myBlockedUsers[child.key];
+            
+            const div = document.createElement('div');
+            div.className = `user-item ${isBlocked ? 'blocked-user' : ''}`;
+            div.id = "user-" + child.key;
+            
+            let adminControls = "";
+            if(currentUser === ADMIN_USER) {
+                let banBtn = userData.banned ? 
+                    `<button class="mod-btn unban-btn" onclick="toggleBan('${child.key}', false); event.stopPropagation();">Unban</button>` :
+                    `<button class="mod-btn ban-btn" onclick="toggleBan('${child.key}', true); event.stopPropagation();">Ban</button>`;
+                
+                let delBtn = `<button class="mod-btn del-user-btn" onclick="deleteUser('${child.key}'); event.stopPropagation();">Delete</button>`;
+                adminControls = banBtn + delBtn;
+            }
+
+            let blockBtn = `<button class="mod-btn block-btn" onclick="toggleBlock('${child.key}', ${!isBlocked}); event.stopPropagation();">${isBlocked ? 'Unblock' : 'Block'}</button>`;
+
+            div.innerHTML = `
+                <div class="user-item-header" onclick="openDM('${child.key}')">
+                    <span>👤 ${child.key} ${userData.banned ? '🚫' : ''} ${isBlocked ? '🔇' : ''}</span>
+                </div>
+                <div class="user-item-controls">
+                    ${blockBtn}
+                    ${adminControls}
+                </div>
+            `;
+            list.appendChild(div);
+        });
+        
+        // Re-apply highlight if a chat is active
+        if(currentPath.startsWith("dm/")) {
+            uiHighlight("user-" + currentPath.split("_").find(u => u !== currentUser && u !== "dm/"));
+        }
+    }
+
+    function toggleBlock(targetUser, status) {
+        if(status) {
+            db.ref("users/" + currentUser + "/blocked/" + targetUser).set(true);
+        } else {
+            db.ref("users/" + currentUser + "/blocked/" + targetUser).remove();
+        }
     }
 
     function toggleBan(targetUser, status) {
         if(confirm(`${status ? 'Ban' : 'Unban'} ${targetUser}?`)) {
             db.ref("users/" + targetUser + "/banned").set(status);
+        }
+    }
+
+    function deleteUser(targetUser) {
+        if(confirm(`Completely DELETE the account for ${targetUser}? This cannot be undone.`)) {
+            db.ref("users/" + targetUser).remove();
         }
     }
 
@@ -220,6 +299,10 @@
     }
 
     function openDM(targetUser) {
+        if(myBlockedUsers[targetUser]) {
+            alert("You have blocked this user. Unblock them to send a DM.");
+            return;
+        }
         const roomID = [currentUser, targetUser].sort().join("_");
         currentPath = "dm/" + roomID;
         document.getElementById('chatTitle').innerText = "💬 " + targetUser;
@@ -250,6 +333,10 @@
             list.innerHTML = "";
             snap.forEach(child => {
                 const m = child.val();
+                
+                // HIDE MESSAGES FROM BLOCKED USERS
+                if(myBlockedUsers[m.user]) return;
+
                 const isMe = m.user === currentUser;
                 const isAdmin = currentUser === ADMIN_USER;
                 const time = m.time ? new Date(m.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";

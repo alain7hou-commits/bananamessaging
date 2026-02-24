@@ -6,8 +6,8 @@
     <title>Études</title>
     <style>
         :root {
-            /*  Changed to a cool Neon Purple! */
-            --primary: #9d4edd; 
+            /* Changed to your bold red color! */
+            --primary: #BF092F; 
             --bg: #1a1a1a;
             --sidebar-bg: #252525;
             --text: #ffffff;
@@ -49,10 +49,18 @@
         .active-chat { border-left: 4px solid var(--primary); background: #333 !important; }
         .blocked-user { opacity: 0.5; }
 
+        /* UNREAD & ONLINE DOTS */
         .unread-dot {
             display: inline-block; width: 10px; height: 10px;
             background: var(--danger); border-radius: 50%;
             margin-left: 8px; box-shadow: 0 0 5px var(--danger);
+        }
+
+        .online-dot {
+            display: inline-block; width: 8px; height: 8px;
+            background: #44bb44; border-radius: 50%;
+            margin-left: 5px; box-shadow: 0 0 5px #44bb44;
+            vertical-align: middle;
         }
 
         /* MODERATION & USER CONTROLS */
@@ -74,7 +82,7 @@
         .msg.me { align-self: flex-end; background: var(--primary); color: #fff; }
         .msg-text { word-break: break-word; flex: 1; }
         .msg-info { display: block; font-size: 10px; opacity: 0.6; margin-bottom: 4px; font-weight: bold; color: #ccc; }
-        .msg.me .msg-info { color: #f0f0f0; } /* Makes timestamp lighter on the purple bubble */
+        .msg.me .msg-info { color: #f0f0f0; } 
         .timestamp { font-size: 9px; margin-left: 8px; font-weight: normal; opacity: 0.7; }
 
         .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 0; width: auto; margin: 0; opacity: 0.4; }
@@ -85,6 +93,9 @@
         .status-circle { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
         .circle-delivered { border: 2px solid #888; background: transparent; box-sizing: border-box; }
         .circle-seen { background: #44bb44; box-shadow: 0 0 5px #44bb44; }
+
+        /* TYPING INDICATOR */
+        #typingIndicator { padding: 5px 25px; font-size: 11px; color: #888; font-style: italic; min-height: 15px; background: #111; }
 
         #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; }
         
@@ -118,7 +129,7 @@
         </div>
         
         <button onclick="changePassword()" style="background:#444; color:white; margin-top:10px; font-size: 14px;">Change Password</button>
-        <button onclick="location.reload()" style="background:var(--danger); margin-top:10px; font-size: 14px;">Logout</button>
+        <button onclick="logoutUser()" style="background:var(--danger); margin-top:10px; font-size: 14px;">Logout</button>
     </div>
 
     <div id="chat">
@@ -126,6 +137,9 @@
             <span id="chatTitle">Select a user to chat</span>
         </div>
         <ul id="messages"></ul>
+        
+        <div id="typingIndicator" class="hidden"></div>
+
         <div id="sendBar">
             <input id="msgInput" placeholder="Type a message...">
             <button onclick="send()" style="width:80px; margin:0">Send</button>
@@ -156,11 +170,12 @@
     let currentUser = null;
     let currentPath = null;
     let activeChatPath = null; 
+    let typingTimeout = null; 
     
     // FILTERS, BLOCKS, AND STATE
     let lastSentTime = 0;
     const COOLDOWN_MS = 900;
-    const BAD_WORDS = ["fuck", "shit", "67", "epstein", "diddy", "alt","nigger","NiGGER"]; 
+    const BAD_WORDS = ["fuck", "shit", "67", "epstein", "diddy", "alt"]; 
     
     let myBlockedUsers = {}; 
     let myUnreadUsers = {};
@@ -179,7 +194,7 @@
         try {
             if(type === 'signup') {
                 await firebase.auth().createUserWithEmailAndPassword(fakeEmail, p);
-                await db.ref("users/" + u).set({ banned: false });
+                await db.ref("users/" + u).set({ banned: false, online: true });
                 start(u);
             } else {
                 await firebase.auth().signInWithEmailAndPassword(fakeEmail, p);
@@ -210,6 +225,20 @@
             document.getElementById('adminPanel').classList.remove('hidden');
         }
 
+        // --- ONLINE STATUS TRACKING ---
+        const connectedRef = db.ref(".info/connected");
+        const myOnlineRef = db.ref("users/" + currentUser + "/online");
+        
+        connectedRef.on("value", (snap) => {
+            if (snap.val() === true) {
+                // When disconnected, set online to false
+                myOnlineRef.onDisconnect().set(false).then(() => {
+                    // Set online to true when connected
+                    myOnlineRef.set(true);
+                });
+            }
+        });
+
         db.ref("users/" + currentUser).on("value", snap => {
             if(!snap.exists()) {
                 alert("Your account has been deleted by an admin.");
@@ -232,6 +261,17 @@
         });
 
         loadUsers();
+    }
+
+    // Custom logout function to set offline status immediately
+    function logoutUser() {
+        if(currentUser) {
+            db.ref("users/" + currentUser + "/online").set(false).then(() => {
+                location.reload();
+            });
+        } else {
+            location.reload();
+        }
     }
 
     // --- CHANGE PASSWORD ---
@@ -290,11 +330,14 @@
             }
 
             let blockBtn = `<button class="mod-btn block-btn" onclick="toggleBlock('${child.key}', ${!isBlocked}); event.stopPropagation();">${isBlocked ? 'Unblock' : 'Block'}</button>`;
+            
+            // Generate the dots
             let unreadDot = hasUnread ? `<span class="unread-dot"></span>` : "";
+            let onlineDot = userData.online ? `<span class="online-dot" title="Online"></span>` : "";
 
             div.innerHTML = `
                 <div class="user-item-header" onclick="openDM('${child.key}')">
-                    <span>👤 ${child.key} ${userData.banned ? '🚫' : ''} ${isBlocked ? '🔇' : ''} ${unreadDot}</span>
+                    <span>👤 ${child.key} ${onlineDot} ${userData.banned ? '🚫' : ''} ${isBlocked ? '🔇' : ''} ${unreadDot}</span>
                 </div>
                 <div class="user-item-controls">
                     ${blockBtn}
@@ -368,6 +411,7 @@
         if (activeChatPath) {
             db.ref("messages/" + activeChatPath).off();
             db.ref("readReceipts/" + activeChatPath).off();
+            db.ref("typing/" + activeChatPath).off(); 
         }
         activeChatPath = currentPath;
         
@@ -383,6 +427,23 @@
         } else {
             roomReadReceipts = {};
         }
+
+        db.ref("typing/" + currentPath).on("value", snap => {
+            const typingData = snap.val() || {};
+            const indicator = document.getElementById('typingIndicator');
+            
+            const typingUsers = Object.keys(typingData).filter(u => u !== currentUser && typingData[u] === true);
+            
+            if (typingUsers.length > 0) {
+                indicator.innerText = typingUsers.length === 1 
+                    ? `💬 ${typingUsers[0]} is typing...` 
+                    : `💬 Multiple people are typing...`;
+                indicator.classList.remove('hidden');
+            } else {
+                indicator.classList.add('hidden');
+                indicator.innerText = "";
+            }
+        });
 
         db.ref("messages/" + currentPath).on("value", snap => {
             currentMessages = [];
@@ -407,7 +468,6 @@
         });
     }
 
-    //  ADDED MISSING renderChatUI FUNCTION WITH FIXED READ RECEIPT LOGIC
     function renderChatUI() {
         const list = document.getElementById('messages');
         if (!list) return;
@@ -438,7 +498,6 @@
             `;
             list.appendChild(li);
 
-            // PERFECTED READ RECEIPT LOGIC
             if (isMe && currentPath.startsWith("dm/")) {
                 let isLastSentByMe = true;
                 for (let i = index + 1; i < currentMessages.length; i++) {
@@ -454,7 +513,6 @@
                     
                     const theirReceiptId = roomReadReceipts[otherUser];
                     
-                    // Because Firebase Push IDs are chronological, we check if our message ID <= their read receipt
                     if (theirReceiptId && msg.id <= theirReceiptId) {
                         statusDiv.innerHTML = `Seen <span class="status-circle circle-seen"></span>`;
                     } else {
@@ -468,6 +526,18 @@
         list.scrollTop = list.scrollHeight;
     }
 
+    document.getElementById('msgInput').addEventListener('input', () => {
+        if (!currentPath) return;
+
+        db.ref("typing/" + currentPath + "/" + currentUser).set(true);
+
+        if (typingTimeout) clearTimeout(typingTimeout);
+
+        typingTimeout = setTimeout(() => {
+            db.ref("typing/" + currentPath + "/" + currentUser).remove();
+        }, 1500);
+    });
+
     function send() {
         if(!currentPath) return alert("Please select a user or global chat first!");
 
@@ -477,7 +547,7 @@
 
         const now = Date.now();
         if(now - lastSentTime < COOLDOWN_MS) {
-            alert("Slow down!  Chill for a second.");
+            alert("Slow down! Chill for a second.");
             return;
         }
 
@@ -488,6 +558,9 @@
             text: filteredText,
             time: now
         });
+
+        db.ref("typing/" + currentPath + "/" + currentUser).remove();
+        if (typingTimeout) clearTimeout(typingTimeout);
 
         if(currentPath.startsWith("dm/")) {
             const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
@@ -502,7 +575,6 @@
         db.ref("messages/" + currentPath + "/" + msgID).remove();
     }
 
-    // --- ADMIN CONTROLS ---
     async function wipeAllChatsLive() {
         if(confirm("🚨 WARNING: Delete ALL messages across ALL chats?")) {
             try {

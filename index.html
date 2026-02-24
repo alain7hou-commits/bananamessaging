@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grape Messaging 🍇</title>
+    <title>Tuff Messaging Site</title>
     <style>
         :root {
-            /* 🍇 Changed to a cool Neon Purple! */
+            /*  Changed to a cool Neon Purple! */
             --primary: #9d4edd; 
             --bg: #1a1a1a;
             --sidebar-bg: #252525;
@@ -103,7 +103,7 @@
 
 <div id="app">
     <div id="sidebar">
-        <h3 id="myUserDisplay" style="color:var(--primary); margin-top:0">🍇 Grape</h3>
+        <h3 id="myUserDisplay" style="color:var(--primary); margin-top:0"> Grape</h3>
         
         <button class="sidebar-btn" onclick="openGlobalChat()" id="globalChatBtn">🌍 Global Chat</button>
 
@@ -407,7 +407,7 @@
         });
     }
 
-    // 🍇 ADDED MISSING renderChatUI FUNCTION WITH FIXED READ RECEIPT LOGIC
+    //  ADDED MISSING renderChatUI FUNCTION WITH FIXED READ RECEIPT LOGIC
     function renderChatUI() {
         const list = document.getElementById('messages');
         if (!list) return;
@@ -477,7 +477,7 @@
 
         const now = Date.now();
         if(now - lastSentTime < COOLDOWN_MS) {
-            alert("Slow down! 🍇 Chill for a second.");
+            alert("Slow down!  Chill for a second.");
             return;
         }
 

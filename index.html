@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Banana Messaging 🍌</title>
+    <title>Grape Messaging 🍇</title>
     <style>
         :root {
-            --primary: #ffb347;
+            /* 🍇 Changed to a cool Neon Purple! */
+            --primary: #9d4edd; 
             --bg: #1a1a1a;
             --sidebar-bg: #252525;
             --text: #ffffff;
@@ -70,9 +71,10 @@
         .msg { max-width: 75%; padding: 10px 15px; border-radius: 12px; background: var(--msg-bg); position: relative; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; animation: fadeIn 0.2s ease-in;}
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
-        .msg.me { align-self: flex-end; background: var(--primary); color: #000; }
+        .msg.me { align-self: flex-end; background: var(--primary); color: #fff; }
         .msg-text { word-break: break-word; flex: 1; }
-        .msg-info { display: block; font-size: 10px; opacity: 0.6; margin-bottom: 4px; font-weight: bold; }
+        .msg-info { display: block; font-size: 10px; opacity: 0.6; margin-bottom: 4px; font-weight: bold; color: #ccc; }
+        .msg.me .msg-info { color: #f0f0f0; } /* Makes timestamp lighter on the purple bubble */
         .timestamp { font-size: 9px; margin-left: 8px; font-weight: normal; opacity: 0.7; }
 
         .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 0; width: auto; margin: 0; opacity: 0.4; }
@@ -101,7 +103,7 @@
 
 <div id="app">
     <div id="sidebar">
-        <h3 id="myUserDisplay" style="color:var(--primary); margin-top:0">🍌 Banana</h3>
+        <h3 id="myUserDisplay" style="color:var(--primary); margin-top:0">🍇 Grape</h3>
         
         <button class="sidebar-btn" onclick="openGlobalChat()" id="globalChatBtn">🌍 Global Chat</button>
 
@@ -184,7 +186,6 @@
                 start(u);
             }
         } catch (error) {
-            // Updated Error Messages
             if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
                 alert("Incorrect password! Please try again.");
             } else if (error.code === 'auth/user-not-found') {
@@ -270,7 +271,6 @@
             const userData = child.val();
             const isBlocked = myBlockedUsers[child.key];
             
-            // Hides unread dot if you are currently looking at that chat
             const expectedChatPath = "dm/" + [currentUser, child.key].sort().join("_");
             const isCurrentChat = (currentPath === expectedChatPath);
             const hasUnread = myUnreadUsers[child.key] && !isCurrentChat;
@@ -374,7 +374,6 @@
         if(currentPath && currentPath.startsWith("dm/")) {
             const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
             
-            // Just remove the unread dot here, the messages listener below handles the read receipt
             db.ref("users/" + currentUser + "/unread/" + targetUser).remove();
 
             db.ref("readReceipts/" + currentPath).on("value", snap => {
@@ -387,18 +386,17 @@
 
         db.ref("messages/" + currentPath).on("value", snap => {
             currentMessages = [];
-            let lastMsgId = ""; // 🍌 Track the exact ID of the last message
+            let lastMsgId = ""; 
             
             snap.forEach(child => {
                 let msg = { id: child.key, ...child.val() };
                 currentMessages.push(msg);
-                lastMsgId = msg.id; // Updates to the latest message in the room
+                lastMsgId = msg.id; 
             });
 
             if(currentPath && currentPath.startsWith("dm/")) {
                 const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
                 
-                // 🍌 Set the read receipt to the exact Message ID instead of a local timestamp
                 if (lastMsgId) {
                     db.ref("readReceipts/" + currentPath + "/" + currentUser).set(lastMsgId);
                 }
@@ -409,7 +407,66 @@
         });
     }
 
-    
+    // 🍇 ADDED MISSING renderChatUI FUNCTION WITH FIXED READ RECEIPT LOGIC
+    function renderChatUI() {
+        const list = document.getElementById('messages');
+        if (!list) return;
+        list.innerHTML = "";
+        
+        let otherUser = null;
+        if (currentPath && currentPath.startsWith("dm/")) {
+            otherUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
+        }
+
+        currentMessages.forEach((msg, index) => {
+            const isMe = msg.user === currentUser;
+            const li = document.createElement('li');
+            li.className = `msg ${isMe ? 'me' : ''}`;
+            
+            let timeString = new Date(msg.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            let delBtn = (isMe || currentUser === ADMIN_USER) 
+                ? `<button class="del-btn" onclick="deleteMsg('${msg.id}')">🗑️</button>` 
+                : "";
+
+            li.innerHTML = `
+                <div class="msg-text">
+                    <span class="msg-info">${isMe ? "" : msg.user} <span class="timestamp">${timeString}</span></span>
+                    ${msg.text}
+                </div>
+                ${delBtn}
+            `;
+            list.appendChild(li);
+
+            // PERFECTED READ RECEIPT LOGIC
+            if (isMe && currentPath.startsWith("dm/")) {
+                let isLastSentByMe = true;
+                for (let i = index + 1; i < currentMessages.length; i++) {
+                    if (currentMessages[i].user === currentUser) {
+                        isLastSentByMe = false;
+                        break;
+                    }
+                }
+
+                if (isLastSentByMe) {
+                    const statusDiv = document.createElement('div');
+                    statusDiv.className = "status-text";
+                    
+                    const theirReceiptId = roomReadReceipts[otherUser];
+                    
+                    // Because Firebase Push IDs are chronological, we check if our message ID <= their read receipt
+                    if (theirReceiptId && msg.id <= theirReceiptId) {
+                        statusDiv.innerHTML = `Seen <span class="status-circle circle-seen"></span>`;
+                    } else {
+                        statusDiv.innerHTML = `Delivered <span class="status-circle circle-delivered"></span>`;
+                    }
+                    list.appendChild(statusDiv);
+                }
+            }
+        });
+
+        list.scrollTop = list.scrollHeight;
+    }
 
     function send() {
         if(!currentPath) return alert("Please select a user or global chat first!");
@@ -420,7 +477,7 @@
 
         const now = Date.now();
         if(now - lastSentTime < COOLDOWN_MS) {
-            alert("Slow down! 🍌 Chill for a second.");
+            alert("Slow down! 🍇 Chill for a second.");
             return;
         }
 
@@ -442,7 +499,6 @@
     }
 
     function deleteMsg(msgID) {
-        // Removed the confirm pop-up to make deleting instant
         db.ref("messages/" + currentPath + "/" + msgID).remove();
     }
 

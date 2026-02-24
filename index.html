@@ -374,8 +374,7 @@
         if(currentPath && currentPath.startsWith("dm/")) {
             const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
             
-            // Mark as read immediately
-            db.ref("readReceipts/" + currentPath + "/" + currentUser).set(Date.now());
+            // Just remove the unread dot here, the messages listener below handles the read receipt
             db.ref("users/" + currentUser + "/unread/" + targetUser).remove();
 
             db.ref("readReceipts/" + currentPath).on("value", snap => {
@@ -388,14 +387,21 @@
 
         db.ref("messages/" + currentPath).on("value", snap => {
             currentMessages = [];
+            let lastMsgId = ""; // 🍌 Track the exact ID of the last message
+            
             snap.forEach(child => {
-                currentMessages.push({ id: child.key, ...child.val() });
+                let msg = { id: child.key, ...child.val() };
+                currentMessages.push(msg);
+                lastMsgId = msg.id; // Updates to the latest message in the room
             });
 
             if(currentPath && currentPath.startsWith("dm/")) {
                 const targetUser = currentPath.split("dm/")[1].split("_").find(u => u !== currentUser);
-                // Keep updating read receipt as new messages flow in
-                db.ref("readReceipts/" + currentPath + "/" + currentUser).set(Date.now());
+                
+                // 🍌 Set the read receipt to the exact Message ID instead of a local timestamp
+                if (lastMsgId) {
+                    db.ref("readReceipts/" + currentPath + "/" + currentUser).set(lastMsgId);
+                }
                 db.ref("users/" + currentUser + "/unread/" + targetUser).remove();
             }
 
@@ -403,69 +409,7 @@
         });
     }
 
-    function renderChatUI() {
-        const list = document.getElementById('messages');
-        
-        // Save scroll position
-        const isAtBottom = list.scrollHeight - list.scrollTop <= list.clientHeight + 50; 
-        const prevScroll = list.scrollTop;
-        
-        list.innerHTML = "";
-
-        let lastMyMsgId = null;
-        for(let i = currentMessages.length - 1; i >= 0; i--) {
-            if(currentMessages[i].user === currentUser) {
-                lastMyMsgId = currentMessages[i].id;
-                break;
-            }
-        }
-
-        let targetUser = currentPath && currentPath.startsWith("dm/") ? currentPath.split("dm/")[1].split("_").find(u => u !== currentUser) : null;
-        let targetReadTime = targetUser ? (roomReadReceipts[targetUser] || 0) : 0;
-
-        currentMessages.forEach(m => {
-            if(myBlockedUsers[m.user]) return;
-
-            const isMe = m.user === currentUser;
-            const isAdmin = currentUser === ADMIN_USER;
-            const timeStr = m.time ? new Date(m.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
-            
-            const li = document.createElement('li');
-            li.className = `msg ${isMe ? 'me' : ''}`;
-            
-            // Instant delete (No confirm prompt)
-            const delBtn = (isMe || isAdmin) ? `<button class="del-btn" onclick="deleteMsg('${m.id}')">✕</button>` : '';
-
-            li.innerHTML = `
-                <div class="msg-text">
-                    <span class="msg-info">${m.user === ADMIN_USER ? '👑 ' : ''}${m.user} <span class="timestamp">${timeStr}</span></span>
-                    ${m.text}
-                </div>
-                ${delBtn}
-            `;
-            list.appendChild(li);
-
-            if (isMe && m.id === lastMyMsgId && currentPath && currentPath.startsWith("dm/")) {
-                const statusDiv = document.createElement('div');
-                statusDiv.className = 'status-text';
-                
-                // Added a 10 second tolerance window to account for computer clock skew
-                if (targetReadTime >= (m.time - 10000)) {
-                    statusDiv.innerHTML = `<span class="status-circle circle-seen"></span> Seen`;
-                } else {
-                    statusDiv.innerHTML = `<span class="status-circle circle-delivered"></span> Delivered`;
-                }
-                list.appendChild(statusDiv);
-            }
-        });
-        
-        // Restore scroll intelligently
-        if (isAtBottom) {
-            list.scrollTop = list.scrollHeight;
-        } else {
-            list.scrollTop = prevScroll;
-        }
-    }
+    
 
     function send() {
         if(!currentPath) return alert("Please select a user or global chat first!");

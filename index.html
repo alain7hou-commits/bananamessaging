@@ -6,7 +6,6 @@
     <title>Studyo</title>
     <style>
         :root {
-            /* Default Accent Color */
             --primary: #BF092F; 
             --bg: #1a1a1a;
             --sidebar-bg: #252525;
@@ -14,6 +13,7 @@
             --msg-bg: #333;
             --danger: #ff5555;
             --admin-color: #00d4ff;
+            --warning: #ffaa00;
         }
 
         body {
@@ -23,27 +23,17 @@
             position: relative;
         }
 
-        /* ANNOUNCEMENT BANNER */
-        #announcementBanner {
-            position: absolute; top: 0; left: 0; width: 100%;
-            background: #ffaa00; color: #000; font-weight: bold;
-            padding: 10px 20px; z-index: 1000; box-sizing: border-box;
-            display: flex; justify-content: space-between; align-items: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-        }
-        #announcementBanner button {
-            width: auto; margin: 0; padding: 6px 12px; background: rgba(0,0,0,0.2); 
-            color: #000; border-radius: 6px; font-size: 12px;
-        }
-        #announcementBanner button:hover { background: rgba(0,0,0,0.3); }
-
         /* LOGIN */
         #loginPage { text-align: center; background: var(--sidebar-bg); padding: 40px; border-radius: 20px; width: 320px; z-index: 10; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .hidden { display: none !important; }
 
         input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
         button { width: 100%; padding: 12px; margin-top: 10px; background: var(--primary); border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; user-select: none; }
-        button:hover { opacity: 0.9; }
+        button:hover:not(:disabled) { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .text-btn { background: none; border: none; color: #aaa; font-size: 12px; margin-top: 15px; text-decoration: underline; padding: 0; width: auto; font-weight: normal; }
+        .text-btn:hover { color: white; background: none; }
 
         /* APP LAYOUT */
         #app { display: none; width: 100vw; height: 100vh; flex-direction: row; }
@@ -66,7 +56,7 @@
             display: flex; flex-direction: column; transition: 0.2s; font-size: 14px;
         }
         .user-item-header { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-        .user-item-controls { display: flex; gap: 4px; margin-top: 6px; justify-content: flex-end; }
+        .user-item-controls { display: flex; gap: 4px; margin-top: 6px; justify-content: flex-end; flex-wrap: wrap;}
         
         .user-item:hover { background: #333; }
         .active-chat { border-left: 4px solid var(--primary); background: #333 !important; }
@@ -92,6 +82,7 @@
         .unban-btn { background: #44bb44; color: white; }
         .del-user-btn { background: #aa0000; color: white; }
         .block-btn { background: #666; color: white; }
+        .kick-btn { background: var(--warning); color: black; }
 
         /* CHAT AREA */
         #chat { flex: 1; display: flex; flex-direction: column; background: #111; position: relative; }
@@ -127,17 +118,14 @@
 </head>
 <body>
 
-<div id="announcementBanner" class="hidden">
-    <span id="announcementText"></span>
-    <button onclick="dismissAnnouncement()">Dismiss</button>
-</div>
-
 <div id="loginPage">
     <h2 style="color:var(--primary)"> TUFF MESSAGING SITE</h2>
     <input id="u" placeholder="Username">
     <input id="p" type="password" placeholder="Password">
-    <button onclick="auth('login')">Login</button>
-    <button style="background:#444; color:white" onclick="auth('signup')">Sign Up</button>
+    <button id="loginBtn" onclick="auth('login')">Login</button>
+    <button id="signupBtn" style="background:#444; color:white" onclick="auth('signup')">Sign Up</button>
+    <div id="kickMessage" style="color:var(--warning); margin-top:15px; font-weight:bold; font-size:14px;"></div>
+    <button class="text-btn" onclick="requestPasswordReset()">Forgot Password?</button>
 </div>
 
 <div id="app">
@@ -158,9 +146,8 @@
         <div id="adminPanel" class="hidden">
             <div class="list-title">Admin Tools</div>
             <div id="adminTools">
-                <input id="adminAnnouncement" placeholder="Broadcast message..." style="padding:8px; font-size:12px; margin:0;">
-                <button onclick="postAnnouncement()" style="font-size:11px; padding:8px; background:var(--admin-color); color:black;">Post Announcement</button>
-                <button onclick="wipeAllChatsLive()" style="font-size:11px; padding:8px; background:var(--danger); color:white; margin-top:10px;">Delete All Chats Live</button>
+                <button onclick="clearAllStuckTyping()" style="font-size:11px; padding:8px; background:var(--warning); color:black;">Clear Stuck Typing</button>
+                <button onclick="wipeAllChatsLive()" style="font-size:11px; padding:8px; background:var(--danger); color:white; margin-top:5px;">Delete All Chats Live</button>
             </div>
         </div>
         
@@ -207,25 +194,29 @@
     let currentPath = null;
     let activeChatPath = null; 
     let typingTimeout = null; 
+    let loginTimerInterval = null;
     
-    // FILTERS, BLOCKS, AND STATE
     let lastSentTime = 0;
     const COOLDOWN_MS = 900;
-    const BAD_WORDS = ["fuck", "shit", "67", "epstein", "diddy", "nigger","n i g g e r","nigga","bitch"]; 
+    const BAD_WORDS = ["fuck", "shit", "67", "epstein", "diddy", "bitch"]; 
     
     let myBlockedUsers = {}; 
     let myUnreadUsers = {};
     let allUsersSnap = null;
     let currentMessages = [];
     let roomReadReceipts = {};
-    
-    let currentAnnouncementId = null;
 
-    // --- AUTH ---
+    // --- AUTH & KICK LOGIC ---
     async function auth(type) {
         const u = document.getElementById('u').value.trim().toLowerCase();
         const p = document.getElementById('p').value.trim();
         if(!u || !p) return alert("Fill everything in!");
+
+        if (type === 'signup') {
+            if (localStorage.getItem('tuff_account_created') && u !== ADMIN_USER) {
+                return alert("You can only create one account per computer!");
+            }
+        }
 
         const fakeEmail = u + "@bananachat.com";
 
@@ -233,43 +224,78 @@
             if(type === 'signup') {
                 await firebase.auth().createUserWithEmailAndPassword(fakeEmail, p);
                 await db.ref("users/" + u).set({ banned: false, online: true });
-                start(u);
+                localStorage.setItem('tuff_account_created', 'true');
+                checkKickStatusAndStart(u);
             } else {
                 await firebase.auth().signInWithEmailAndPassword(fakeEmail, p);
-                start(u);
+                checkKickStatusAndStart(u);
             }
         } catch (error) {
             let cleanMessage = "Something went wrong. Please try again.";
-            
             switch(error.code) {
                 case 'auth/wrong-password':
                 case 'auth/invalid-credential':
-                case 'auth/invalid-login-credentials':
-                    cleanMessage = "Incorrect password! Please try again.";
-                    break;
-                case 'auth/user-not-found':
-                    cleanMessage = "User not found. Please sign up first!";
-                    break;
-                case 'auth/email-already-in-use':
-                    cleanMessage = "That username is already taken! Try another one.";
-                    break;
-                case 'auth/weak-password':
-                    cleanMessage = "Your password is too weak. Make it at least 6 characters.";
-                    break;
-                case 'auth/network-request-failed':
-                    cleanMessage = "Network error. Check your internet connection.";
-                    break;
-                case 'auth/too-many-requests':
-                    cleanMessage = "Too many failed attempts. Please try again later.";
-                    break;
-                default:
-                    cleanMessage = "Error: " + error.message; 
+                case 'auth/invalid-login-credentials': cleanMessage = "Incorrect password! Please try again."; break;
+                case 'auth/user-not-found': cleanMessage = "User not found. Please sign up first!"; break;
+                case 'auth/email-already-in-use': cleanMessage = "That username is already taken! Try another one."; break;
+                case 'auth/weak-password': cleanMessage = "Your password is too weak. Make it at least 6 characters."; break;
+                default: cleanMessage = "Error: " + error.message; 
             }
-            
             alert(cleanMessage);
         }
     }
 
+    function checkKickStatusAndStart(user) {
+        db.ref("users/" + user).once("value", snap => {
+            const data = snap.val() || {};
+            if (data.kickUntil && data.kickUntil > Date.now()) {
+                firebase.auth().signOut();
+                showKickTimer(data.kickUntil);
+            } else {
+                start(user);
+            }
+        });
+    }
+
+    function showKickTimer(timestamp) {
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('loginPage').classList.remove('hidden');
+        
+        const loginBtn = document.getElementById("loginBtn");
+        const signupBtn = document.getElementById("signupBtn");
+        const msgDiv = document.getElementById("kickMessage");
+        
+        loginBtn.disabled = true;
+        signupBtn.disabled = true;
+        
+        if(loginTimerInterval) clearInterval(loginTimerInterval);
+        
+        loginTimerInterval = setInterval(() => {
+            const remaining = Math.ceil((timestamp - Date.now()) / 1000);
+            if (remaining <= 0) {
+                clearInterval(loginTimerInterval);
+                msgDiv.innerText = "";
+                loginBtn.disabled = false;
+                signupBtn.disabled = false;
+            } else {
+                msgDiv.innerText = `You have been kicked.\nWait ${remaining}s before logging in.`;
+            }
+        }, 1000);
+    }
+
+    function requestPasswordReset() {
+        const u = prompt("Enter your exact username. The admin will be notified that you forgot your password:");
+        if (u) {
+            db.ref("adminNotifications").push({
+                type: 'forgot_password',
+                user: u.trim().toLowerCase(),
+                time: Date.now()
+            });
+            alert("Admin has been notified! Wait for them to contact you or clear your account.");
+        }
+    }
+
+    // --- MAIN APP INITIALIZATION ---
     function start(user) {
         currentUser = user;
         document.getElementById('loginPage').classList.add('hidden');
@@ -278,39 +304,28 @@
         
         if(currentUser === ADMIN_USER) {
             document.getElementById('adminPanel').classList.remove('hidden');
+            
+            // Listen for Password Requests
+            db.ref("adminNotifications").on("child_added", snap => {
+                const req = snap.val();
+                if (req && req.time > Date.now() - 300000) { 
+                    alert(`🚨 ADMIN ALERT: User '${req.user}' forgot their password. Delete their account in Firebase Authentication so they can remake it.`);
+                }
+            });
         }
 
-        // --- THEME COLOR INIT ---
         db.ref("users/" + currentUser + "/themeColor").on("value", snap => {
             const savedColor = snap.val() || "#BF092F";
             document.documentElement.style.setProperty('--primary', savedColor);
             document.getElementById('themeColor').value = savedColor;
         });
 
-        // --- THEME COLOR LISTENER ---
         document.getElementById('themeColor').addEventListener('input', (e) => {
             const color = e.target.value;
             document.documentElement.style.setProperty('--primary', color);
             db.ref("users/" + currentUser + "/themeColor").set(color);
         });
 
-        // --- ANNOUNCEMENT LISTENER ---
-        db.ref("announcement").on("value", snap => {
-            const data = snap.val();
-            if(data && data.text) {
-                currentAnnouncementId = String(data.id);
-                const dismissedId = String(localStorage.getItem("dismissedAnnouncement"));
-                
-                if(dismissedId !== currentAnnouncementId) {
-                    document.getElementById('announcementText').innerText = "📢 " + data.text;
-                    document.getElementById('announcementBanner').classList.remove('hidden');
-                }
-            } else {
-                document.getElementById('announcementBanner').classList.add('hidden');
-            }
-        });
-
-        // --- ONLINE STATUS TRACKING ---
         const connectedRef = db.ref(".info/connected");
         const myOnlineRef = db.ref("users/" + currentUser + "/online");
         
@@ -326,9 +341,17 @@
             if(!snap.exists()) {
                 alert("Your account data has been deleted by an admin.");
                 location.reload();
-            } else if(snap.val().banned === true) {
-                alert("You've been banned!");
-                location.reload();
+            } else {
+                const data = snap.val();
+                if(data.banned === true) {
+                    alert("You've been banned!");
+                    location.reload();
+                } else if (data.kickUntil && data.kickUntil > Date.now()) {
+                    myOnlineRef.set(false).then(() => {
+                        firebase.auth().signOut();
+                        showKickTimer(data.kickUntil);
+                    });
+                }
             }
         });
 
@@ -346,7 +369,7 @@
         loadUsers();
     }
 
-    // --- PREFERENCES / ANNOUNCEMENTS / STATUS ---
+    // --- PREFERENCES & ADMIN UTILS ---
     function resetColor() {
         const defaultColor = "#BF092F";
         document.getElementById('themeColor').value = defaultColor;
@@ -354,24 +377,16 @@
         db.ref("users/" + currentUser + "/themeColor").remove();
     }
 
-    function postAnnouncement() {
-        const text = document.getElementById('adminAnnouncement').value.trim();
-        if(!text) return;
-        db.ref("announcement").set({ text: text, id: Date.now() });
-        document.getElementById('adminAnnouncement').value = "";
-    }
-
-    function dismissAnnouncement() {
-        document.getElementById('announcementBanner').classList.add('hidden');
-        if(currentAnnouncementId) {
-            localStorage.setItem("dismissedAnnouncement", currentAnnouncementId);
+    function clearAllStuckTyping() {
+        if(confirm("Clear all typing indicators from the database?")) {
+            db.ref("typing").remove().then(() => alert("Stuck typing cleared!"));
         }
     }
 
     function logoutUser() {
         if(currentUser) {
             db.ref("users/" + currentUser + "/online").set(false).then(() => {
-                location.reload();
+                firebase.auth().signOut().then(() => location.reload());
             });
         } else {
             location.reload();
@@ -427,8 +442,9 @@
                     `<button class="mod-btn unban-btn" onclick="toggleBan('${child.key}', false); event.stopPropagation();">Unban</button>` :
                     `<button class="mod-btn ban-btn" onclick="toggleBan('${child.key}', true); event.stopPropagation();">Ban</button>`;
                 
+                let kickBtn = `<button class="mod-btn kick-btn" onclick="kickUser('${child.key}'); event.stopPropagation();">Kick</button>`;
                 let delBtn = `<button class="mod-btn del-user-btn" onclick="deleteUser('${child.key}'); event.stopPropagation();">Delete</button>`;
-                adminControls = banBtn + delBtn;
+                adminControls = banBtn + kickBtn + delBtn;
             }
 
             let blockBtn = `<button class="mod-btn block-btn" onclick="toggleBlock('${child.key}', ${!isBlocked}); event.stopPropagation();">${isBlocked ? 'Unblock' : 'Block'}</button>`;
@@ -461,6 +477,15 @@
     function toggleBan(targetUser, status) {
         if(confirm(`${status ? 'Ban' : 'Unban'} ${targetUser}?`)) {
             db.ref("users/" + targetUser + "/banned").set(status);
+        }
+    }
+
+    function kickUser(targetUser) {
+        const seconds = prompt(`How many seconds should ${targetUser} be kicked for?`, "60");
+        if(seconds && !isNaN(seconds)) {
+            const kickUntil = Date.now() + (parseInt(seconds) * 1000);
+            db.ref("users/" + targetUser + "/kickUntil").set(kickUntil);
+            alert(`${targetUser} kicked for ${seconds} seconds.`);
         }
     }
 

@@ -207,43 +207,47 @@
     let roomReadReceipts = {};
 
     // --- AUTH & KICK LOGIC ---
-    async function auth(type) {
-        const u = document.getElementById('u').value.trim().toLowerCase();
-        const p = document.getElementById('p').value.trim();
-        if(!u || !p) return alert("Fill everything in!");
+  async function auth(type) {
+    const u = document.getElementById('u').value.trim().toLowerCase();
+    const p = document.getElementById('p').value.trim();
+    if(!u || !p) return alert("Fill everything in!");
 
-        if (type === 'signup') {
-            if (localStorage.getItem('tuff_account_created') && u !== ADMIN_USER) {
-                return alert("You can only create one account per computer!");
-            }
-        }
-
-        const fakeEmail = u + "@bananachat.com";
-
-        try {
-            if(type === 'signup') {
-                await firebase.auth().createUserWithEmailAndPassword(fakeEmail, p);
-                await db.ref("users/" + u).set({ banned: false, online: true });
-                localStorage.setItem('tuff_account_created', 'true');
-                checkKickStatusAndStart(u);
-            } else {
-                await firebase.auth().signInWithEmailAndPassword(fakeEmail, p);
-                checkKickStatusAndStart(u);
-            }
-        } catch (error) {
-            let cleanMessage = "Something went wrong. Please try again.";
-            switch(error.code) {
-                case 'auth/wrong-password':
-                case 'auth/invalid-credential':
-                case 'auth/invalid-login-credentials': cleanMessage = "Incorrect password! Please try again."; break;
-                case 'auth/user-not-found': cleanMessage = "User not found. Please sign up first!"; break;
-                case 'auth/email-already-in-use': cleanMessage = "That username is already taken! Try another one."; break;
-                case 'auth/weak-password': cleanMessage = "Your password is too weak. Make it at least 6 characters."; break;
-                default: cleanMessage = "Error: " + error.message; 
-            }
-            alert(cleanMessage);
-        }
+    // Check browser lock for BOTH login and signup
+    const lockedUser = localStorage.getItem('tuff_locked_user');
+    if (lockedUser && lockedUser !== u && u !== ADMIN_USER) {
+        return alert(`This browser is locked to the account: ${lockedUser}`);
     }
+
+    const fakeEmail = u + "@bananachat.com";
+
+    try {
+        if(type === 'signup') {
+            await firebase.auth().createUserWithEmailAndPassword(fakeEmail, p);
+            await db.ref("users/" + u).set({ banned: false, online: true });
+        } else {
+            await firebase.auth().signInWithEmailAndPassword(fakeEmail, p);
+        }
+        
+        // Lock the browser to this user on success
+        if (u !== ADMIN_USER) {
+            localStorage.setItem('tuff_locked_user', u);
+        }
+        
+        checkKickStatusAndStart(u);
+    } catch (error) {
+        let cleanMessage = "Something went wrong. Please try again.";
+        switch(error.code) {
+            case 'auth/wrong-password':
+            case 'auth/invalid-credential':
+            case 'auth/invalid-login-credentials': cleanMessage = "Incorrect password! Please try again."; break;
+            case 'auth/user-not-found': cleanMessage = "User not found. Please sign up first!"; break;
+            case 'auth/email-already-in-use': cleanMessage = "That username is already taken! Try another one."; break;
+            case 'auth/weak-password': cleanMessage = "Your password is too weak. Make it at least 6 characters."; break;
+            default: cleanMessage = "Error: " + error.message; 
+        }
+        alert(cleanMessage);
+    }
+}
 
     function checkKickStatusAndStart(user) {
         db.ref("users/" + user).once("value", snap => {
@@ -284,16 +288,17 @@
     }
 
     function requestPasswordReset() {
-        const u = prompt("Enter your exact username. The admin will be notified that you forgot your password:");
-        if (u) {
-            db.ref("adminNotifications").push({
-                type: 'forgot_password',
-                user: u.trim().toLowerCase(),
-                time: Date.now()
-            });
-            alert("Admin has been notified! Wait for them to contact you or clear your account.");
-        }
+    const u = prompt("Enter your exact username. The admin will be notified to wipe your account so you can remake it:");
+    if (u) {
+        db.ref("adminNotifications").push({
+            type: 'forgot_password',
+            user: u.trim().toLowerCase(),
+            time: Date.now(),
+            resolved: false // Keeps the notification alive until admin clears it
+        });
+        alert("Admin has been notified! Try signing up again with this username later once they clear it in the console.");
     }
+}
 
     // --- MAIN APP INITIALIZATION ---
     function start(user) {
@@ -305,11 +310,13 @@
         if(currentUser === ADMIN_USER) {
             document.getElementById('adminPanel').classList.remove('hidden');
             
-            // Listen for Password Requests
+            // Listen for Password Requests persistently
             db.ref("adminNotifications").on("child_added", snap => {
                 const req = snap.val();
-                if (req && req.time > Date.now() - 300000) { 
-                    alert(`🚨 ADMIN ALERT: User '${req.user}' forgot their password. Delete their account in Firebase Authentication so they can remake it.`);
+                if (req && !req.resolved) { 
+                    if(confirm(`🚨 ADMIN ALERT: User '${req.user}' forgot their password.\n\nDelete their account in Firebase Authentication so they can remake it.\n\nPress OK to mark this alert as resolved.`)) {
+                        snap.ref.update({ resolved: true });
+                    }
                 }
             });
         }
@@ -531,13 +538,14 @@
 
     // --- MESSAGING & READ RECEIPTS ---
     function cleanText(text) {
-        let clean = text;
-        BAD_WORDS.forEach(word => {
-            const regex = new RegExp(word, "gi");
-            clean = clean.replace(regex, "****");
-        });
-        return clean;
-    }
+    let clean = text;
+    BAD_WORDS.forEach(word => {
+        // Use \b for word boundaries so it strictly catches the exact words
+        const regex = new RegExp(`\\b${word}\\b`, "gi");
+        clean = clean.replace(regex, "****");
+    });
+    return clean;
+}
 
     function loadMessages() {
         if (activeChatPath) {

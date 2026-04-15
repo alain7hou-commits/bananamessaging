@@ -27,8 +27,8 @@
         #loginPage { text-align: center; background: var(--sidebar-bg); padding: 40px; border-radius: 20px; width: 320px; z-index: 10; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .hidden { display: none !important; }
 
-        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; margin-top: 10px; background: var(--primary); border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; user-select: none; }
+        input, textarea { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; font-family: inherit;}
+        button { width: 100%; padding: 12px; margin-top: 10px; background: var(--primary); border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; user-select: none; color: white;}
         button:hover:not(:disabled) { opacity: 0.9; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         
@@ -44,7 +44,6 @@
 
         .list-title { font-size: 11px; color: var(--primary); letter-spacing: 1px; margin: 20px 0 10px 5px; text-transform: uppercase; }
         
-        /* PREFERENCES CONTROLS */
         .pref-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
         #themeColor { width: 40px; height: 40px; padding: 0; border: none; border-radius: 8px; cursor: pointer; background: transparent; }
         #themeColor::-webkit-color-swatch-wrapper { padding: 0; }
@@ -62,21 +61,9 @@
         .active-chat { border-left: 4px solid var(--primary); background: #333 !important; }
         .blocked-user { opacity: 0.5; }
 
-        /* UNREAD & ONLINE DOTS */
-        .unread-dot {
-            display: inline-block; width: 10px; height: 10px;
-            background: var(--danger); border-radius: 50%;
-            margin-left: 8px; box-shadow: 0 0 5px var(--danger);
-        }
+        .unread-dot { display: inline-block; width: 10px; height: 10px; background: var(--danger); border-radius: 50%; margin-left: 8px; box-shadow: 0 0 5px var(--danger); }
+        .online-dot { display: inline-block; width: 8px; height: 8px; background: #44bb44; border-radius: 50%; margin-left: 5px; box-shadow: 0 0 5px #44bb44; vertical-align: middle; }
 
-        .online-dot {
-            display: inline-block; width: 8px; height: 8px;
-            background: #44bb44; border-radius: 50%;
-            margin-left: 5px; box-shadow: 0 0 5px #44bb44;
-            vertical-align: middle;
-        }
-
-        /* MODERATION & USER CONTROLS */
         .mod-btn { font-size: 10px; padding: 4px 8px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; width: auto; margin: 0; }
         .ban-btn { background: var(--danger); color: white; }
         .unban-btn { background: #44bb44; color: white; }
@@ -90,30 +77,45 @@
         
         #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; }
         
-        .msg { max-width: 75%; padding: 10px 15px; border-radius: 12px; background: var(--msg-bg); position: relative; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; animation: fadeIn 0.2s ease-in;}
+        .msg { max-width: 75%; padding: 10px 15px; border-radius: 12px; background: var(--msg-bg); position: relative; display: flex; flex-direction: column; gap: 5px; animation: fadeIn 0.2s ease-in;}
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         .msg.me { align-self: flex-end; background: var(--primary); color: #fff; }
-        .msg-text { word-break: break-word; flex: 1; }
-        .msg-info { display: block; font-size: 10px; opacity: 0.6; margin-bottom: 4px; font-weight: bold; color: #ccc; }
+        .msg-header { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px; }
+        .msg-text { word-break: break-word; }
+        .msg-img { max-width: 100%; max-height: 250px; border-radius: 8px; margin-top: 5px; object-fit: contain; }
+        .msg-info { font-size: 10px; opacity: 0.6; font-weight: bold; color: #ccc; }
         .msg.me .msg-info { color: #f0f0f0; } 
         .timestamp { font-size: 9px; margin-left: 8px; font-weight: normal; opacity: 0.7; }
 
-        .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 0; width: auto; margin: 0; opacity: 0.4; }
+        .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 0; margin: 0; opacity: 0.4; }
         .del-btn:hover { opacity: 1; }
 
-        /* STATUS CIRCLES */
         .status-text { align-self: flex-end; font-size: 11px; color: #888; margin-top: -6px; margin-bottom: 4px; margin-right: 5px; font-weight: bold; display: flex; align-items: center; gap: 5px; }
         .status-circle { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
         .circle-delivered { border: 2px solid #888; background: transparent; box-sizing: border-box; }
         .circle-seen { background: #44bb44; box-shadow: 0 0 5px #44bb44; }
 
-        /* TYPING INDICATOR */
         #typingIndicator { padding: 5px 25px; font-size: 11px; color: #888; font-style: italic; min-height: 15px; background: #111; }
 
-        #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; }
+        #sendBar { padding: 20px; display: flex; gap: 10px; background: #222; border-top: 1px solid #333; align-items: center; }
+        .icon-btn { background: #444; border-radius: 50%; width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; margin: 0; cursor: pointer; padding: 0;}
+        .icon-btn:hover { background: #555; }
         
         #adminTools { background: #1a1a1a; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #444; display:flex; flex-direction:column; gap:5px; }
+
+        /* INBOX UI */
+        #inboxOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 100; display: none; align-items: center; justify-content: center; }
+        #inboxModal { width: 600px; max-width: 90%; height: 80vh; background: #222; border-radius: 12px; border: 1px solid #444; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .inbox-header { padding: 15px 20px; background: #1a1a1a; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .inbox-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 15px; gap: 10px; }
+        .mail-item { background: #333; padding: 15px; border-radius: 8px; position: relative; border-left: 4px solid transparent; }
+        .mail-item.unread { border-left-color: var(--primary); background: #3a3a3a; }
+        .mail-title { font-weight: bold; margin-bottom: 5px; color: white; display: flex; justify-content: space-between;}
+        .mail-body { font-size: 13px; color: #ccc; margin-top: 8px; white-space: pre-wrap; }
+        
+        #composeBox { display: none; padding: 15px; background: #1a1a1a; border-top: 1px solid #333; }
+        .badge { background: var(--primary); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 5px; vertical-align: middle; }
     </style>
 </head>
 <body>
@@ -130,9 +132,10 @@
 
 <div id="app">
     <div id="sidebar">
-        <h3 id="myUserDisplay" style="color:var(--primary); margin-top:0"> Grape</h3>
+        <h3 id="myUserDisplay" style="color:var(--primary); margin-top:0"> User</h3>
         
         <button class="sidebar-btn" onclick="openGlobalChat()" id="globalChatBtn">🌍 Global Chat</button>
+        <button class="sidebar-btn" onclick="toggleInbox()">📥 Mailbox <span id="inboxCount" class="hidden badge">0</span></button>
 
         <div class="list-title">Direct Messages</div>
         <div id="userList" style="flex:1; overflow-y:auto; min-height:100px;"></div>
@@ -164,8 +167,33 @@
         <div id="typingIndicator" class="hidden"></div>
 
         <div id="sendBar">
+            <button class="icon-btn" onclick="document.getElementById('imgUpload').click()" title="Send Image">📎</button>
+            <input type="file" id="imgUpload" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
             <input id="msgInput" placeholder="Type a message...">
-            <button onclick="send()" style="width:80px; margin:0">Send</button>
+            <button onclick="sendTextMsg()" style="width:80px; margin:0">Send</button>
+        </div>
+    </div>
+</div>
+
+<div id="inboxOverlay">
+    <div id="inboxModal">
+        <div class="inbox-header">
+            <h3 style="margin:0; color:var(--primary)">📥 Mailbox</h3>
+            <div>
+                <button onclick="toggleCompose()" style="width:auto; padding:8px 15px; margin:0; background:#44bb44;">Compose</button>
+                <button onclick="toggleInbox()" style="width:auto; padding:8px 15px; margin:0 0 0 10px; background:#444;">Close</button>
+            </div>
+        </div>
+        
+        <div id="composeBox">
+            <input id="mailTo" placeholder="Recipient Username">
+            <input id="mailSubject" placeholder="Subject">
+            <textarea id="mailBody" placeholder="Type your email here..." rows="4"></textarea>
+            <button onclick="sendMail()">Send Mail</button>
+        </div>
+
+        <div class="inbox-content" id="inboxList">
+            <div style="text-align:center; color:#888; margin-top:20px;">Loading emails...</div>
         </div>
     </div>
 </div>
@@ -207,47 +235,57 @@
     let roomReadReceipts = {};
 
     // --- AUTH & KICK LOGIC ---
-  async function auth(type) {
-    const u = document.getElementById('u').value.trim().toLowerCase();
-    const p = document.getElementById('p').value.trim();
-    if(!u || !p) return alert("Fill everything in!");
+    async function auth(type) {
+        const u = document.getElementById('u').value.trim().toLowerCase();
+        const p = document.getElementById('p').value.trim();
+        if(!u || !p) return alert("Fill everything in!");
 
-    // Check browser lock for BOTH login and signup
-    const lockedUser = localStorage.getItem('tuff_locked_user');
-    if (lockedUser && lockedUser !== u && u !== ADMIN_USER) {
-        return alert(`This browser is locked to the account: ${lockedUser}`);
+        const lockedUser = localStorage.getItem('tuff_locked_user');
+        if (lockedUser && lockedUser !== u && u !== ADMIN_USER) {
+            return alert(`This browser is locked to the account: ${lockedUser}`);
+        }
+
+        const fakeEmail = u + "@bananachat.com";
+
+        try {
+            if(type === 'signup') {
+                await firebase.auth().createUserWithEmailAndPassword(fakeEmail, p);
+                await db.ref("users/" + u).set({ banned: false, online: true });
+                
+                // Welcome email!
+                db.ref("inbox/" + u).push({
+                    from: ADMIN_USER,
+                    subject: "Welcome to Studyo!",
+                    body: "Welcome to the site. Treat others with respect and follow the rules.",
+                    time: Date.now(),
+                    read: false
+                });
+
+            } else {
+                await firebase.auth().signInWithEmailAndPassword(fakeEmail, p);
+            }
+            
+            if (u !== ADMIN_USER) {
+                localStorage.setItem('tuff_locked_user', u);
+            }
+            
+            document.getElementById('u').value = "";
+            document.getElementById('p').value = "";
+            checkKickStatusAndStart(u);
+        } catch (error) {
+            let cleanMessage = "Something went wrong. Please try again.";
+            switch(error.code) {
+                case 'auth/wrong-password':
+                case 'auth/invalid-credential':
+                case 'auth/invalid-login-credentials': cleanMessage = "Incorrect password! Please try again."; break;
+                case 'auth/user-not-found': cleanMessage = "User not found. Please sign up first!"; break;
+                case 'auth/email-already-in-use': cleanMessage = "That username is already taken! Try another one."; break;
+                case 'auth/weak-password': cleanMessage = "Your password is too weak. Make it at least 6 characters."; break;
+                default: cleanMessage = "Error: " + error.message; 
+            }
+            alert(cleanMessage);
+        }
     }
-
-    const fakeEmail = u + "@bananachat.com";
-
-    try {
-        if(type === 'signup') {
-            await firebase.auth().createUserWithEmailAndPassword(fakeEmail, p);
-            await db.ref("users/" + u).set({ banned: false, online: true });
-        } else {
-            await firebase.auth().signInWithEmailAndPassword(fakeEmail, p);
-        }
-        
-        // Lock the browser to this user on success
-        if (u !== ADMIN_USER) {
-            localStorage.setItem('tuff_locked_user', u);
-        }
-        
-        checkKickStatusAndStart(u);
-    } catch (error) {
-        let cleanMessage = "Something went wrong. Please try again.";
-        switch(error.code) {
-            case 'auth/wrong-password':
-            case 'auth/invalid-credential':
-            case 'auth/invalid-login-credentials': cleanMessage = "Incorrect password! Please try again."; break;
-            case 'auth/user-not-found': cleanMessage = "User not found. Please sign up first!"; break;
-            case 'auth/email-already-in-use': cleanMessage = "That username is already taken! Try another one."; break;
-            case 'auth/weak-password': cleanMessage = "Your password is too weak. Make it at least 6 characters."; break;
-            default: cleanMessage = "Error: " + error.message; 
-        }
-        alert(cleanMessage);
-    }
-}
 
     function checkKickStatusAndStart(user) {
         db.ref("users/" + user).once("value", snap => {
@@ -288,17 +326,18 @@
     }
 
     function requestPasswordReset() {
-    const u = prompt("Enter your exact username. The admin will be notified to wipe your account so you can remake it:");
-    if (u) {
-        db.ref("adminNotifications").push({
-            type: 'forgot_password',
-            user: u.trim().toLowerCase(),
-            time: Date.now(),
-            resolved: false // Keeps the notification alive until admin clears it
-        });
-        alert("Admin has been notified! Try signing up again with this username later once they clear it in the console.");
+        const u = prompt("Enter your exact username. The admin will be emailed to wipe your account so you can remake it:");
+        if (u) {
+            db.ref("inbox/" + ADMIN_USER).push({
+                from: "System",
+                subject: "🚨 Password Reset Request",
+                body: `User "${u.trim().toLowerCase()}" forgot their password and requested an account wipe.\n\nPlease delete their Auth account in the Firebase Console so they can sign up again.`,
+                time: Date.now(),
+                read: false
+            });
+            alert("The admin has been emailed! Try signing up again later once they clear your account.");
+        }
     }
-}
 
     // --- MAIN APP INITIALIZATION ---
     function start(user) {
@@ -309,16 +348,6 @@
         
         if(currentUser === ADMIN_USER) {
             document.getElementById('adminPanel').classList.remove('hidden');
-            
-            // Listen for Password Requests persistently
-            db.ref("adminNotifications").on("child_added", snap => {
-                const req = snap.val();
-                if (req && !req.resolved) { 
-                    if(confirm(`🚨 ADMIN ALERT: User '${req.user}' forgot their password.\n\nDelete their account in Firebase Authentication so they can remake it.\n\nPress OK to mark this alert as resolved.`)) {
-                        snap.ref.update({ resolved: true });
-                    }
-                }
-            });
         }
 
         db.ref("users/" + currentUser + "/themeColor").on("value", snap => {
@@ -373,7 +402,101 @@
             renderUserList();
         });
 
+        // Listen for Inbox Mail
+        db.ref("inbox/" + currentUser).on("value", snap => {
+            const mails = snap.val() || {};
+            let unreadCount = 0;
+            const list = document.getElementById('inboxList');
+            list.innerHTML = "";
+            
+            const sortedMails = Object.keys(mails).map(k => ({id: k, ...mails[k]})).sort((a,b) => b.time - a.time);
+            
+            if(sortedMails.length === 0) {
+                list.innerHTML = `<div style="text-align:center; color:#888; margin-top:20px;">Your inbox is empty.</div>`;
+            }
+
+            sortedMails.forEach(mail => {
+                if(!mail.read) unreadCount++;
+                
+                let timeStr = new Date(mail.time).toLocaleString([], {month:'short', day:'numeric', hour: '2-digit', minute:'2-digit'});
+                
+                const div = document.createElement('div');
+                div.className = `mail-item ${mail.read ? '' : 'unread'}`;
+                div.innerHTML = `
+                    <div class="mail-title">
+                        <span>${mail.subject}</span>
+                        <span style="font-size:10px; color:#aaa; font-weight:normal;">${timeStr}</span>
+                    </div>
+                    <div style="font-size:11px; color:var(--primary); margin-top:2px;">From: ${mail.from}</div>
+                    <div class="mail-body">${mail.body}</div>
+                    <div style="margin-top:10px; text-align:right;">
+                        <button onclick="deleteMail('${mail.id}')" style="background:transparent; border:1px solid #aa0000; color:#ff5555; width:auto; padding:4px 8px; font-size:11px;">Delete</button>
+                        ${!mail.read ? `<button onclick="markMailRead('${mail.id}')" style="background:#444; width:auto; padding:4px 8px; font-size:11px; margin-left:5px;">Mark Read</button>` : ''}
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+
+            const badge = document.getElementById('inboxCount');
+            if(unreadCount > 0) {
+                badge.innerText = unreadCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        });
+
         loadUsers();
+        openGlobalChat();
+    }
+
+    // --- INBOX LOGIC ---
+    function toggleInbox() {
+        const overlay = document.getElementById('inboxOverlay');
+        overlay.style.display = overlay.style.display === 'flex' ? 'none' : 'flex';
+        document.getElementById('composeBox').style.display = 'none';
+    }
+
+    function toggleCompose() {
+        const box = document.getElementById('composeBox');
+        box.style.display = box.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function sendMail() {
+        const to = document.getElementById('mailTo').value.trim().toLowerCase();
+        const sub = document.getElementById('mailSubject').value.trim();
+        const body = document.getElementById('mailBody').value.trim();
+
+        if(!to || !sub || !body) return alert("Fill in all fields!");
+
+        // Verify recipient exists
+        db.ref("users/" + to).once("value", snap => {
+            if(!snap.exists() && to !== ADMIN_USER) return alert("User not found!");
+            
+            db.ref("inbox/" + to).push({
+                from: currentUser,
+                subject: cleanText(sub),
+                body: cleanText(body),
+                time: Date.now(),
+                read: false
+            }).then(() => {
+                alert("Mail Sent!");
+                document.getElementById('mailTo').value = "";
+                document.getElementById('mailSubject').value = "";
+                document.getElementById('mailBody').value = "";
+                toggleCompose();
+            });
+        });
+    }
+
+    function deleteMail(id) {
+        if(confirm("Delete this email?")) {
+            db.ref("inbox/" + currentUser + "/" + id).remove();
+        }
+    }
+
+    function markMailRead(id) {
+        db.ref("inbox/" + currentUser + "/" + id).update({ read: true });
     }
 
     // --- PREFERENCES & ADMIN UTILS ---
@@ -509,7 +632,7 @@
         if(typingTimeout) clearTimeout(typingTimeout);
     }
 
-    // --- GLOBAL CHAT ---
+    // --- GLOBAL CHAT & DMs ---
     function openGlobalChat() {
         clearMyTypingState(); 
         currentPath = "global";
@@ -536,16 +659,15 @@
         if(id && document.getElementById(id)) document.getElementById(id).classList.add('active-chat');
     }
 
-    // --- MESSAGING & READ RECEIPTS ---
+    // --- MESSAGING & IMAGES ---
     function cleanText(text) {
-    let clean = text;
-    BAD_WORDS.forEach(word => {
-        // Use \b for word boundaries so it strictly catches the exact words
-        const regex = new RegExp(`\\b${word}\\b`, "gi");
-        clean = clean.replace(regex, "****");
-    });
-    return clean;
-}
+        let clean = text;
+        BAD_WORDS.forEach(word => {
+            const regex = new RegExp(`\\b${word}\\b`, "gi");
+            clean = clean.replace(regex, "****");
+        });
+        return clean;
+    }
 
     function loadMessages() {
         if (activeChatPath) {
@@ -625,15 +747,19 @@
             let timeString = new Date(msg.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             
             let delBtn = (isMe || currentUser === ADMIN_USER) 
-                ? `<button class="del-btn" onclick="deleteMsg('${msg.id}')">🗑️</button>` 
-                : "";
+                ? `<button class="del-btn" onclick="deleteMsg('${msg.id}')" title="Delete">🗑️</button>` 
+                : "<div></div>";
+
+            let imgTag = msg.imgUrl ? `<img src="${msg.imgUrl}" class="msg-img" loading="lazy">` : "";
+            let txtTag = msg.text ? `<div class="msg-text">${msg.text}</div>` : "";
 
             li.innerHTML = `
-                <div class="msg-text">
+                <div class="msg-header">
                     <span class="msg-info">${isMe ? "" : msg.user} <span class="timestamp">${timeString}</span></span>
-                    ${msg.text}
+                    ${delBtn}
                 </div>
-                ${delBtn}
+                ${imgTag}
+                ${txtTag}
             `;
             list.appendChild(li);
 
@@ -681,12 +807,52 @@
         }, 1500);
     });
 
-    function send() {
-        if(!currentPath) return alert("Please select a user or global chat first!");
-
+    function sendTextMsg() {
         const input = document.getElementById('msgInput');
         const text = input.value.trim();
         if(!text) return;
+        
+        input.value = "";
+        pushMessageToDB(text, null);
+    }
+
+    function handleImageUpload(e) {
+        const file = e.target.files[0];
+        if(!file) return;
+        
+        // Clear input so same file can be selected again
+        e.target.value = '';
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                // Compress Image to prevent DB crash
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 500;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const dataUrl = canvas.toDataURL("image/jpeg", 0.7); // 70% quality JPG
+                pushMessageToDB(null, dataUrl);
+            }
+            img.src = event.target.result;
+        }
+        reader.readAsDataURL(file);
+    }
+
+    function pushMessageToDB(text, imgBase64) {
+        if(!currentPath) return alert("Please select a user or global chat first!");
 
         const now = Date.now();
         if(now - lastSentTime < COOLDOWN_MS) {
@@ -694,13 +860,11 @@
             return;
         }
 
-        const filteredText = cleanText(text);
+        let msgObj = { user: currentUser, time: now };
+        if(text) msgObj.text = cleanText(text);
+        if(imgBase64) msgObj.imgUrl = imgBase64;
 
-        db.ref("messages/" + currentPath).push({
-            user: currentUser,
-            text: filteredText,
-            time: now
-        });
+        db.ref("messages/" + currentPath).push(msgObj);
 
         clearMyTypingState();
 
@@ -710,7 +874,6 @@
         }
         
         lastSentTime = now;
-        input.value = "";
     }
 
     function deleteMsg(msgID) {
@@ -729,7 +892,7 @@
         }
     }
     
-    document.getElementById('msgInput').addEventListener("keypress", (e) => { if(e.key === "Enter") send(); });
+    document.getElementById('msgInput').addEventListener("keypress", (e) => { if(e.key === "Enter") sendTextMsg(); });
 </script>
 
 </body>
